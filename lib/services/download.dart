@@ -4,6 +4,7 @@ import '../services/download_service.dart';
 
 class DownloadDialog extends StatefulWidget {
   final List<ExpenseItem> expenses;
+  final List<ExpenseItem> allExpenses; // Add this parameter
   final String periodLabel;
   final double totalAmount;
   final String userName;
@@ -11,6 +12,7 @@ class DownloadDialog extends StatefulWidget {
   const DownloadDialog({
     Key? key,
     required this.expenses,
+    required this.allExpenses, // Add this
     required this.periodLabel,
     required this.totalAmount,
     required this.userName,
@@ -42,6 +44,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
 
     final error = await DownloadService.downloadAsPDF(
       expenses: widget.expenses,
+      allExpenses: widget.allExpenses, // Pass all expenses
       periodLabel: widget.periodLabel,
       totalAmount: widget.totalAmount,
       userName: widget.userName,
@@ -90,12 +93,19 @@ class _DownloadDialogState extends State<DownloadDialog> {
     setState(() => _isDownloading = true);
     Navigator.pop(context);
 
-    // Filter expenses for the selected date range
-    final filteredExpenses = widget.expenses.where((expense) {
+    // Filter expenses for the selected date range from ALL expenses, not just current month
+    final filteredExpenses = widget.allExpenses.where((expense) {
       final expenseDate = expense.date;
       return expenseDate.isAfter(selectedRange.start.subtract(const Duration(days: 1))) &&
           expenseDate.isBefore(selectedRange.end.add(const Duration(days: 1)));
     }).toList();
+
+    // Check if any expenses found in selected range
+    if (filteredExpenses.isEmpty) {
+      setState(() => _isDownloading = false);
+      _showSnackBar('No expenses found in selected date range!', true);
+      return;
+    }
 
     // Calculate total amount for filtered expenses
     final totalAmount = filteredExpenses.fold<double>(
@@ -110,6 +120,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
 
     final error = await DownloadService.downloadAsPDF(
       expenses: filteredExpenses,
+      allExpenses: widget.allExpenses, // Pass all expenses for opening balance calculation
       periodLabel: periodLabel,
       totalAmount: totalAmount,
       userName: widget.userName,

@@ -277,6 +277,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return sortedGrouped;
   }
 
+  // Replace the _showDownloadDialog method in your HomePage with this:
+
   void _showDownloadDialog() {
     print('Filtered transactions: ${_filteredTransactions.length}');
     if (_filteredTransactions.isEmpty) {
@@ -290,11 +292,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       );
       return;
     }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => DownloadDialog(
-        expenses: _filteredTransactions,
+        expenses: _filteredTransactions,     // Selected period transactions
+        allExpenses: _transactions,          // ALL transactions for opening balance
         periodLabel: _periodLabel,
         totalAmount: _netBalance,
         userName: _userName,
