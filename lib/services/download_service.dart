@@ -10,42 +10,61 @@ import '../pages/model.dart';
 
 class DownloadService {
   static String _getFileNameSuffix(String periodLabel) {
-    return periodLabel.replaceAll(' ', '_').replaceAll(',', '').toLowerCase();
+    return periodLabel.replaceAll(' ', '_').replaceAll(',', '').replaceAll('/', '_').toLowerCase();
   }
 
-  static Future<File?> _saveFileBytes(Uint8List bytes, String fileName) async {
+  // Create temporary file and open it directly
+  static Future<File?> _createAndOpenTempFile(Uint8List bytes, String fileName) async {
     try {
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
+      Directory tempDir = await getTemporaryDirectory();
+
+      // Create temp file path
+      final filePath = '${tempDir.path}/$fileName';
+      final file = File(filePath);
+
+      print('Creating temporary PDF at: $filePath');
+      await file.writeAsBytes(bytes);
+
+      // Verify file was created
+      if (await file.exists()) {
+        final fileSize = await file.length();
+        print('Temp PDF created successfully. Size: $fileSize bytes');
+
+        // Open file directly
+        final result = await OpenFile.open(filePath);
+        print('OpenFile result: ${result.type} - ${result.message}');
+
+        if (result.type == ResultType.done) {
+          return file;
+        } else {
+          print('Failed to open file: ${result.message}');
+          return null;
         }
       } else {
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      if (directory != null) {
-        final filePath = '${directory.path}/$fileName';
-        final file = File(filePath);
-        await file.writeAsBytes(bytes);
-        await OpenFile.open(filePath);
-        return file;
+        print('Temp file was not created successfully');
+        return null;
       }
     } catch (e) {
-      print('Error saving file: $e');
+      print('Error creating temp file: $e');
+      return null;
     }
-    return null;
   }
 
   static Future<String?> downloadAsPDF({
     required List<ExpenseItem> expenses,
-    required List<ExpenseItem> allExpenses, // All expenses for opening balance calculation
+    required List<ExpenseItem> allExpenses,
     required String periodLabel,
     required double totalAmount,
     required String userName,
   }) async {
     try {
+      print('Starting PDF generation...');
+      print('Number of expenses: ${expenses.length}');
+
+      if (expenses.isEmpty) {
+        return 'No expenses to generate PDF';
+      }
+
       final pdfBytes = await _generatePDFContent(
         expenses,
         allExpenses,
@@ -53,14 +72,22 @@ class DownloadService {
         totalAmount,
         userName,
       );
+
+      print('PDF content generated. Size: ${pdfBytes.length} bytes');
+
       final fileName = 'expense_report_${_getFileNameSuffix(periodLabel)}.pdf';
-      final file = await _saveFileBytes(pdfBytes, fileName);
+      print('Opening PDF directly: $fileName');
+
+      final file = await _createAndOpenTempFile(pdfBytes, fileName);
 
       if (file != null) {
-        return null;
+        print('PDF opened successfully');
+        return null; // Success
+      } else {
+        return 'Failed to open PDF file';
       }
-      return 'Failed to create PDF file';
     } catch (e) {
+      print('Error in downloadAsPDF: $e');
       return 'Error creating PDF: $e';
     }
   }

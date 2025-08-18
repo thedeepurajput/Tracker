@@ -4,7 +4,7 @@ import '../services/download_service.dart';
 
 class DownloadDialog extends StatefulWidget {
   final List<ExpenseItem> expenses;
-  final List<ExpenseItem> allExpenses; // Add this parameter
+  final List<ExpenseItem> allExpenses;
   final String periodLabel;
   final double totalAmount;
   final String userName;
@@ -12,7 +12,7 @@ class DownloadDialog extends StatefulWidget {
   const DownloadDialog({
     Key? key,
     required this.expenses,
-    required this.allExpenses, // Add this
+    required this.allExpenses,
     required this.periodLabel,
     required this.totalAmount,
     required this.userName,
@@ -55,7 +55,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
     if (error != null) {
       _showSnackBar(error, true);
     } else {
-      _showSnackBar('Month PDF downloaded and opened successfully!');
+      _showSnackBar('Month PDF opened successfully!');
     }
   }
 
@@ -93,12 +93,33 @@ class _DownloadDialogState extends State<DownloadDialog> {
     setState(() => _isDownloading = true);
     Navigator.pop(context);
 
-    // Filter expenses for the selected date range from ALL expenses, not just current month
+    // Filter expenses for the selected date range from ALL expenses
+    // Fixed: Use proper date comparison with inclusive boundaries
     final filteredExpenses = widget.allExpenses.where((expense) {
       final expenseDate = expense.date;
-      return expenseDate.isAfter(selectedRange.start.subtract(const Duration(days: 1))) &&
-          expenseDate.isBefore(selectedRange.end.add(const Duration(days: 1)));
+
+      // Get only the date part (ignore time) for accurate comparison
+      final expenseDateOnly = DateTime(expenseDate.year, expenseDate.month, expenseDate.day);
+      final startDateOnly = DateTime(selectedRange.start.year, selectedRange.start.month, selectedRange.start.day);
+      final endDateOnly = DateTime(selectedRange.end.year, selectedRange.end.month, selectedRange.end.day);
+
+      // Use compareTo for inclusive range checking
+      return expenseDateOnly.compareTo(startDateOnly) >= 0 &&
+          expenseDateOnly.compareTo(endDateOnly) <= 0;
     }).toList();
+
+    // Debug information (you can remove these print statements later)
+    print('Selected range: ${selectedRange.start} to ${selectedRange.end}');
+    print('Total expenses available: ${widget.allExpenses.length}');
+    print('Filtered expenses found: ${filteredExpenses.length}');
+
+    // Print sample dates for debugging
+    if (widget.allExpenses.isNotEmpty) {
+      print('Sample expense dates:');
+      for (int i = 0; i < (widget.allExpenses.length > 5 ? 5 : widget.allExpenses.length); i++) {
+        print('  ${widget.allExpenses[i].date} - ${widget.allExpenses[i].title}');
+      }
+    }
 
     // Check if any expenses found in selected range
     if (filteredExpenses.isEmpty) {
@@ -131,7 +152,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
     if (error != null) {
       _showSnackBar(error, true);
     } else {
-      _showSnackBar('Custom Period PDF downloaded and opened successfully!');
+      _showSnackBar('Custom Period PDF opened successfully!');
     }
   }
 
@@ -179,7 +200,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'PDF will be saved and opened automatically',
+              'PDF will be opened directly without saving',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.white.withOpacity(0.9),
