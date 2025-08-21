@@ -18,7 +18,7 @@ class DownloadService {
     try {
       Directory tempDir = await getTemporaryDirectory();
 
-      // Create temp file path
+      // Create temp file path with proper extension
       final filePath = '${tempDir.path}/$fileName';
       final file = File(filePath);
 
@@ -60,9 +60,13 @@ class DownloadService {
     try {
       print('Starting PDF generation...');
       print('Number of expenses: ${expenses.length}');
+      print('Period label: $periodLabel');
+      print('User name: $userName');
 
+      // Allow empty expenses for custom date ranges
       if (expenses.isEmpty) {
-        return 'No expenses to generate PDF';
+        print('No expenses found for the selected period');
+        // Still generate PDF with empty table
       }
 
       final pdfBytes = await _generatePDFContent(
@@ -74,6 +78,10 @@ class DownloadService {
       );
 
       print('PDF content generated. Size: ${pdfBytes.length} bytes');
+
+      if (pdfBytes.isEmpty) {
+        return 'Failed to generate PDF content';
+      }
 
       final fileName = 'expense_report_${_getFileNameSuffix(periodLabel)}.pdf';
       print('Opening PDF directly: $fileName');
@@ -88,6 +96,7 @@ class DownloadService {
       }
     } catch (e) {
       print('Error in downloadAsPDF: $e');
+      print('Stack trace: ${StackTrace.current}');
       return 'Error creating PDF: $e';
     }
   }
@@ -97,27 +106,32 @@ class DownloadService {
       List<ExpenseItem> allExpenses,
       List<ExpenseItem> selectedExpenses,
       ) {
-    if (selectedExpenses.isEmpty) return 0.0;
+    try {
+      if (selectedExpenses.isEmpty || allExpenses.isEmpty) return 0.0;
 
-    // Get the earliest date from selected expenses
-    final earliestSelectedDate = selectedExpenses
-        .map((e) => e.date)
-        .reduce((a, b) => a.isBefore(b) ? a : b);
+      // Get the earliest date from selected expenses
+      final earliestSelectedDate = selectedExpenses
+          .map((e) => e.date)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
 
-    // Calculate balance from all expenses before the selected period
-    double openingBalance = 0.0;
+      // Calculate balance from all expenses before the selected period
+      double openingBalance = 0.0;
 
-    for (var expense in allExpenses) {
-      if (expense.date.isBefore(earliestSelectedDate)) {
-        if (expense.isIncome) {
-          openingBalance += expense.displayAmount;
-        } else {
-          openingBalance -= expense.displayAmount;
+      for (var expense in allExpenses) {
+        if (expense.date.isBefore(earliestSelectedDate)) {
+          if (expense.isIncome) {
+            openingBalance += expense.displayAmount;
+          } else {
+            openingBalance -= expense.displayAmount;
+          }
         }
       }
-    }
 
-    return openingBalance;
+      return openingBalance;
+    } catch (e) {
+      print('Error calculating opening balance: $e');
+      return 0.0;
+    }
   }
 
   static Future<Uint8List> _generatePDFContent(
@@ -127,209 +141,242 @@ class DownloadService {
       double totalAmount,
       String userName,
       ) async {
-    final pdf = pw.Document();
-    final sortedExpenses = List<ExpenseItem>.from(expenses)
-      ..sort((a, b) => a.date.compareTo(b.date));
+    try {
+      final pdf = pw.Document();
+      final sortedExpenses = List<ExpenseItem>.from(expenses)
+        ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Calculate proper opening balance
-    double openingBalance = _calculateOpeningBalance(allExpenses, expenses);
-    double incomeTotal = 0.0;
-    double expenseTotal = 0.0;
-    double runningBalance = openingBalance;
+      // Calculate proper opening balance
+      double openingBalance = _calculateOpeningBalance(allExpenses, expenses);
+      double incomeTotal = 0.0;
+      double expenseTotal = 0.0;
+      double runningBalance = openingBalance;
 
-    // Calculate totals for selected period only
-    for (var e in sortedExpenses) {
-      if (e.isIncome) {
-        incomeTotal += e.displayAmount;
-      } else {
-        expenseTotal += e.displayAmount;
+      // Calculate totals for selected period only
+      for (var e in sortedExpenses) {
+        if (e.isIncome) {
+          incomeTotal += e.displayAmount;
+        } else {
+          expenseTotal += e.displayAmount;
+        }
       }
-    }
 
-    double closingBalance = openingBalance + incomeTotal - expenseTotal;
+      double closingBalance = openingBalance + incomeTotal - expenseTotal;
 
-    final headerColor = PdfColor.fromHex('6C63FF');
-    final evenRowColor = PdfColors.grey200;
-    final oddRowColor = PdfColors.white;
+      final headerColor = PdfColor.fromHex('6C63FF');
+      final evenRowColor = PdfColors.grey200;
+      final oddRowColor = PdfColors.white;
 
-    final now = DateTime.now();
-    final formattedDate = DateFormat('dd MMM yyyy, HH:mm').format(now);
+      final now = DateTime.now();
+      final formattedDate = DateFormat('dd MMM yyyy, HH:mm').format(now);
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        footer: (context) {
-          return pw.Container(
-            margin: const pw.EdgeInsets.only(top: 10),
-            padding: const pw.EdgeInsets.symmetric(horizontal: 10),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      // Create table rows
+      List<pw.TableRow> tableRows = [
+        // Header row
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: headerColor),
+          children: [
+            _simpleCell('Date', isHeader: true),
+            _simpleCell('Title', isHeader: true),
+            _simpleCell('Category', isHeader: true),
+            _simpleCell('Amount', isHeader: true, alignRight: true),
+            _simpleCell('Remaining', isHeader: true, alignRight: true),
+          ],
+        ),
+      ];
+
+      // Add data rows if expenses exist
+      if (sortedExpenses.isNotEmpty) {
+        tableRows.addAll(
+          sortedExpenses.asMap().entries.map((entry) {
+            final i = entry.key;
+            final e = entry.value;
+            final isIncome = e.isIncome;
+            final color = isIncome ? PdfColors.green : PdfColors.red;
+
+            runningBalance += isIncome ? e.displayAmount : -e.displayAmount;
+
+            return pw.TableRow(
+              decoration: pw.BoxDecoration(
+                color: i % 2 == 0 ? evenRowColor : oddRowColor,
+              ),
               children: [
-                pw.Text(
-                  'Generated on $formattedDate',
-                  style: pw.TextStyle(
-                    fontSize: 8,
-                    color: PdfColors.grey,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                _simpleCell(DateFormat('dd/MM/yyyy').format(e.date)),
+                _simpleCell(e.title),
+                _simpleCell(e.category.label),
+                _simpleCell(
+                  e.displayAmount.toStringAsFixed(2),
+                  color: color,
+                  alignRight: true,
                 ),
-                pw.Text(
-                  '${context.pageNumber} / ${context.pagesCount}',
-                  style: pw.TextStyle(
-                    fontSize: 8,
-                    color: PdfColors.grey,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                _simpleCell(
+                  runningBalance.toStringAsFixed(2),
+                  alignRight: true,
                 ),
               ],
-            ),
-          );
-        },
-        build: (context) => [
-          pw.Text(
-            "$userName's $periodLabel Expense Report",
-            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 20),
-
-          pw.Table(
-            border: pw.TableBorder.all(width: 0.3, color: PdfColors.grey400),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(1.5),
-              1: const pw.FlexColumnWidth(3),
-              2: const pw.FlexColumnWidth(2),
-              3: const pw.FlexColumnWidth(2),
-              4: const pw.FlexColumnWidth(2),
-            },
+            );
+          }).toList(),
+        );
+      } else {
+        // Add empty row if no expenses
+        tableRows.add(
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: evenRowColor),
             children: [
-              pw.TableRow(
-                decoration: pw.BoxDecoration(color: headerColor),
-                children: [
-                  _simpleCell('Date', isHeader: true),
-                  _simpleCell('Title', isHeader: true),
-                  _simpleCell('Category', isHeader: true),
-                  _simpleCell('Amount', isHeader: true, alignRight: true),
-                  _simpleCell('Remaining', isHeader: true, alignRight: true),
-                ],
-              ),
-              ...sortedExpenses.asMap().entries.map((entry) {
-                final i = entry.key;
-                final e = entry.value;
-                final isIncome = e.isIncome;
-                final color = isIncome ? PdfColors.green : PdfColors.red;
-
-                runningBalance += isIncome ? e.displayAmount : -e.displayAmount;
-
-                return pw.TableRow(
-                  decoration: pw.BoxDecoration(
-                    color: i % 2 == 0 ? evenRowColor : oddRowColor,
-                  ),
-                  children: [
-                    _simpleCell(DateFormat('dd/MM/yyyy').format(e.date)),
-                    _simpleCell(e.title),
-                    _simpleCell(e.category.label),
-                    _simpleCell(
-                      e.displayAmount.toStringAsFixed(2),
-                      color: color,
-                      alignRight: true,
-                    ),
-                    _simpleCell(
-                      runningBalance.toStringAsFixed(2),
-                      alignRight: true,
-                    ),
-                  ],
-                );
-              }).toList(),
-
-              pw.TableRow(
-                decoration: pw.BoxDecoration(
-                  color: (sortedExpenses.length - 1) % 2 == 0
-                      ? oddRowColor
-                      : evenRowColor,
-                ),
-                children: List.generate(
-                  5,
-                      (index) => pw.Container(
-                    height: 24,
-                    child: pw.Text(''),
-                  ),
-                ),
-              ),
+              _simpleCell('No transactions found'),
+              _simpleCell(''),
+              _simpleCell(''),
+              _simpleCell(''),
+              _simpleCell(''),
             ],
           ),
+        );
+      }
 
-          pw.SizedBox(height: 30),
-
-          pw.Container(
-            decoration: pw.BoxDecoration(
-              borderRadius: pw.BorderRadius.circular(12),
-              color: PdfColor.fromHex('F3F4F6'),
-              border: pw.Border.all(color: PdfColors.grey400),
-            ),
-            padding: const pw.EdgeInsets.all(24),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Summary',
-                    style:
-                    pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 16),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Opening Balance:', style: pw.TextStyle(fontSize: 14)),
-                    pw.Text('${openingBalance.toStringAsFixed(2)}',
-                        style: pw.TextStyle(
-                          fontSize: 14,
-                          color: openingBalance >= 0 ? PdfColors.green : PdfColors.red,
-                          fontWeight: pw.FontWeight.bold,
-                        )),
-                  ],
-                ),
-                pw.SizedBox(height: 8),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Total Income:',
-                        style: pw.TextStyle(fontSize: 14, color: PdfColors.green)),
-                    pw.Text('${incomeTotal.toStringAsFixed(2)}',
-                        style: pw.TextStyle(fontSize: 14, color: PdfColors.green)),
-                  ],
-                ),
-                pw.SizedBox(height: 8),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Total Expense:',
-                        style: pw.TextStyle(fontSize: 14, color: PdfColors.red)),
-                    pw.Text('${expenseTotal.toStringAsFixed(2)}',
-                        style: pw.TextStyle(fontSize: 14, color: PdfColors.red)),
-                  ],
-                ),
-                pw.Divider(height: 24, thickness: 1),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Closing Balance:',
-                        style: pw.TextStyle(
-                            fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('${closingBalance.toStringAsFixed(2)}',
-                        style: pw.TextStyle(
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                          color: closingBalance >= 0 ? PdfColors.green : PdfColors.red,
-                        )),
-                  ],
-                ),
-              ],
+      // Add spacing row
+      tableRows.add(
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: (sortedExpenses.length) % 2 == 0 ? evenRowColor : oddRowColor,
+          ),
+          children: List.generate(
+            5,
+                (index) => pw.Container(
+              height: 24,
+              child: pw.Text(''),
             ),
           ),
-        ],
-      ),
-    );
+        ),
+      );
 
-    return pdf.save();
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          footer: (context) {
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(top: 10),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 10),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Generated on $formattedDate',
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    '${context.pageNumber} / ${context.pagesCount}',
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.grey,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          build: (context) => [
+            pw.Text(
+              "$userName's $periodLabel Expense Report",
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 20),
+
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.3, color: PdfColors.grey400),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1.5),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(2),
+                3: const pw.FlexColumnWidth(2),
+                4: const pw.FlexColumnWidth(2),
+              },
+              children: tableRows,
+            ),
+
+            pw.SizedBox(height: 30),
+
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                borderRadius: pw.BorderRadius.circular(12),
+                color: PdfColor.fromHex('F3F4F6'),
+                border: pw.Border.all(color: PdfColors.grey400),
+              ),
+              padding: const pw.EdgeInsets.all(24),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Summary',
+                      style:
+                      pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 16),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Opening Balance:', style: pw.TextStyle(fontSize: 14)),
+                      pw.Text('${openingBalance.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            color: openingBalance >= 0 ? PdfColors.green : PdfColors.red,
+                            fontWeight: pw.FontWeight.bold,
+                          )),
+                    ],
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Total Income:',
+                          style: pw.TextStyle(fontSize: 14, color: PdfColors.green)),
+                      pw.Text('${incomeTotal.toStringAsFixed(2)}',
+                          style: pw.TextStyle(fontSize: 14, color: PdfColors.green)),
+                    ],
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Total Expense:',
+                          style: pw.TextStyle(fontSize: 14, color: PdfColors.red)),
+                      pw.Text('${expenseTotal.toStringAsFixed(2)}',
+                          style: pw.TextStyle(fontSize: 14, color: PdfColors.red)),
+                    ],
+                  ),
+                  pw.Divider(height: 24, thickness: 1),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Closing Balance:',
+                          style: pw.TextStyle(
+                              fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('${closingBalance.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                            fontSize: 16,
+                            fontWeight: pw.FontWeight.bold,
+                            color: closingBalance >= 0 ? PdfColors.green : PdfColors.red,
+                          )),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+      print('PDF bytes generated: ${pdfBytes.length}');
+      return pdfBytes;
+    } catch (e) {
+      print('Error in _generatePDFContent: $e');
+      print('Stack trace: ${StackTrace.current}');
+      rethrow;
+    }
   }
 
   static pw.Widget _simpleCell(
