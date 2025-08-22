@@ -66,7 +66,8 @@ class _DownloadDialogState extends State<DownloadDialog> {
     final DateTimeRange? selectedRange = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now(), // Prevent future dates
+      lastDate: DateTime.now(),
+      saveText: 'Download',
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
