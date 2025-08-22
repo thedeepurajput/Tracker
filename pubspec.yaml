@@ -20,6 +20,7 @@ dependencies:
   pdf: ^3.10.6
   excel: ^4.0.3
   open_file: ^3.3.2
+  path_provider: ^2.1.1
   flutter_launcher_icons: ^0.13.1
 
 dev_dependencies:
@@ -27,12 +28,22 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/image/logo.jpg"
+  image_path: "assets/image/logo.png"
+
+  # Adaptive icon for modern Android (8.0+)
+  adaptive_icon_background: "#ffffff" # Background color
+  adaptive_icon_foreground: "assets/image/logo.png" # Foreground image
+
+  # Remove background for transparent logo
+  remove_alpha_ios: true
+
+  # For better quality
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/image/logo.jpg
+    - assets/image/logo.png

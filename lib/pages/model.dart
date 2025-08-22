@@ -168,7 +168,6 @@ enum ExpenseCategory {
   }
 }
 
-// ✅ Fixed PaymentMethod enum
 enum PaymentMethod {
   cash,
   creditCard,
@@ -177,7 +176,7 @@ enum PaymentMethod {
   upi,
   wallet,
   other,
-  netBanking; // ✅ Fixed syntax - removed comma
+  netBanking;
 
   String get label {
     switch (this) {
@@ -196,7 +195,7 @@ enum PaymentMethod {
       case PaymentMethod.other:
         return 'Other';
       case PaymentMethod.netBanking:
-        return 'Net Banking'; // ✅ Fixed - was throwing UnimplementedError
+        return 'Net Banking';
     }
   }
 
@@ -217,12 +216,12 @@ enum PaymentMethod {
       case PaymentMethod.other:
         return Icons.payment;
       case PaymentMethod.netBanking:
-        return Icons.account_balance; // ✅ Fixed - was throwing UnimplementedError
+        return Icons.account_balance;
     }
   }
 }
 
-// ✅ Added missing IncomeCategory enum
+
 enum IncomeCategory {
   salary,
   business,

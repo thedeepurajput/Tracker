@@ -8,7 +8,6 @@ import './add_expense.dart';
 import './expense_detail.dart';
 import './model.dart';
 
-// Define the DateFilterType enum
 enum DateFilterType { day, month, year }
 
 class HomePage extends StatefulWidget {
@@ -31,21 +30,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   String _userName = '';
-  static const String _defaultUserId = 'user_1'; // Default user ID
+  static const String _defaultUserId = 'user_1';
+  bool _showOpeningBalance = false;
 
   DateFilterType _dateFilterType = DateFilterType.month;
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
 
-  // FAB position variables
-  Offset _fabPosition = const Offset(0, 0); // Will be initialized in initState
-  Offset _defaultFabPosition = const Offset(0, 0); // Store default position
+  Offset _fabPosition = const Offset(0, 0);
+  Offset _defaultFabPosition = const Offset(0, 0);
   Size _screenSize = Size.zero;
   bool _isDragging = false;
-  final double _fabWidth = 200; // Increased to fix 30-pixel overflow
-  final double _fabHeight = 56; // Height of FAB (including padding)
+  final double _fabWidth = 200;
+  final double _fabHeight = 56;
 
-  // Simulated modifiable category list (replace with database if applicable)
   List<ExpenseCategory> _availableCategories = List.from(ExpenseCategory.values);
 
   @override
@@ -61,7 +59,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _initializeUser();
     _loadTransactionsFromDatabase();
 
-    // Initialize FAB position after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeFabPosition();
     });
@@ -72,17 +69,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final padding = MediaQuery.of(context).padding;
     setState(() {
       _screenSize = size;
-      // Default position: bottom right with safe area padding
       _defaultFabPosition = Offset(
-        size.width - _fabWidth - 16 - padding.right, // 16 for margin
-        size.height - _fabHeight - 16 - padding.bottom, // Account for bottom nav bar
+        size.width - _fabWidth - 16 - padding.right,
+        size.height - _fabHeight - 16 - padding.bottom,
       );
       _fabPosition = _defaultFabPosition;
       print('FAB initialized: $_fabPosition, screen size: $_screenSize, safe area padding: $padding');
     });
   }
 
-  // Initialize user from database or use provided userName
   void _initializeUser() async {
     try {
       final dbUserName = await ExpenseDatabase.instance.getUserName(_defaultUserId);
@@ -184,6 +179,34 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return _totalIncome - _totalExpenses;
   }
 
+  double get _openingBalance {
+    final currentPeriodStart = _getPeriodStartDate();
+    final transactionsBeforePeriod = _transactions.where((transaction) =>
+        transaction.date.isBefore(currentPeriodStart)
+    ).toList();
+
+    final incomeBeforePeriod = transactionsBeforePeriod
+        .where((t) => t.isIncome)
+        .fold(0.0, (sum, t) => sum + t.displayAmount);
+
+    final expensesBeforePeriod = transactionsBeforePeriod
+        .where((t) => t.isExpense)
+        .fold(0.0, (sum, t) => sum + t.displayAmount);
+
+    return incomeBeforePeriod - expensesBeforePeriod;
+  }
+
+  DateTime _getPeriodStartDate() {
+    switch (_dateFilterType) {
+      case DateFilterType.day:
+        return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      case DateFilterType.month:
+        return DateTime(_selectedYear, _selectedMonth, 1);
+      case DateFilterType.year:
+        return DateTime(_selectedYear, 1, 1);
+    }
+  }
+
   Map<ExpenseCategory, double> get _categoryTotals {
     final totals = <ExpenseCategory, double>{};
     final filteredExpenses = _filteredExpenses;
@@ -233,7 +256,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     throw StateError('Invalid DateFilterType');
   }
 
-  // Group transactions by day, styled like Google Pay
   Map<String, List<ExpenseItem>> _groupTransactionsByDay() {
     final Map<String, List<ExpenseItem>> grouped = {};
     final now = DateTime.now();
@@ -249,11 +271,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
       grouped.putIfAbsent(key, () => []).add(transaction);
     }
-    // Sort transactions within each group by date (newest first)
     grouped.forEach((key, transactions) {
       transactions.sort((a, b) => b.date.compareTo(a.date));
     });
-    // Sort groups by date (newest first)
     final sortedGrouped = Map.fromEntries(
       grouped.entries.toList()
         ..sort((a, b) {
@@ -277,8 +297,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return sortedGrouped;
   }
 
-  // Replace the _showDownloadDialog method in your HomePage with this:
-
   void _showDownloadDialog() {
     print('Filtered transactions: ${_filteredTransactions.length}');
     if (_filteredTransactions.isEmpty) {
@@ -297,8 +315,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => DownloadDialog(
-        expenses: _filteredTransactions,     // Selected period transactions
-        allExpenses: _transactions,          // ALL transactions for opening balance
+        expenses: _filteredTransactions,
+        allExpenses: _transactions,
         periodLabel: _periodLabel,
         totalAmount: _netBalance,
         userName: _userName,
@@ -707,7 +725,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // Handle FAB drag update
   void _updateFabPosition(DragUpdateDetails details) {
     setState(() {
       _fabPosition = Offset(
@@ -718,7 +735,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     });
   }
 
-  // Build FAB
   Widget _buildFAB() {
     if (_screenSize == Size.zero) return const SizedBox.shrink();
 
@@ -744,7 +760,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onLongPress: () {
           HapticFeedback.mediumImpact();
           setState(() {
-            _fabPosition = _defaultFabPosition; // Reset to default on long press
+            _fabPosition = _defaultFabPosition;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -814,7 +830,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // Build transaction card with enhanced design
   Widget _buildTransactionCard(ExpenseItem transaction, int index, int groupLength, ThemeData theme) {
     final isIncome = transaction.isIncome;
     final displayAmount = transaction.displayAmount;
@@ -911,7 +926,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // Build empty state styled like Google Pay
   Widget _buildEmptyState() {
     return Padding(
       padding: const EdgeInsets.all(32),
@@ -937,12 +951,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // Check if a category has associated transactions
   bool _hasTransactionsForCategory(ExpenseCategory category) {
     return _transactions.any((transaction) => transaction.category == category);
   }
 
-  // Delete a category from the available categories list
   void _deleteCategory(ExpenseCategory category, BuildContext context) {
     setState(() {
       _availableCategories.remove(category);
@@ -950,7 +962,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _filterCategory = null;
       }
     });
-    Navigator.pop(context); // Close the PopupMenuButton
+    Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Category "${category.label}" deleted'),
@@ -966,7 +978,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final theme = Theme.of(context);
     final groupedTransactions = _groupTransactionsByDay();
 
-    // Update screen size when context is available
     if (_screenSize == Size.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initializeFabPosition();
@@ -1189,7 +1200,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ],
           ),
-          _buildFAB(), // Always show the FAB
+          _buildFAB(),
         ],
       ),
     );
@@ -1265,53 +1276,94 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildBalanceCard() {
-    final isPositive = _netBalanceAll >= 0;
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isPositive
-              ? [const Color(0xFF00B894), const Color(0xFF00D2A0)]
-              : [const Color(0xFFFF6B6B), const Color(0xFFFF8E8E)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: (isPositive ? const Color(0xFF00B894) : const Color(0xFFFF6B6B)).withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    final isPositive = _showOpeningBalance ? _openingBalance >= 0 : _netBalanceAll >= 0;
+    final displayAmount = _showOpeningBalance ? _openingBalance : _netBalanceAll;
+    final cardTitle = _showOpeningBalance ? 'Opening Balance' : 'Net Balance';
+    final cardSubtitle = _showOpeningBalance
+        ? 'Before ${_periodLabel}'
+        : (isPositive ? 'Surplus' : 'Deficit');
+
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity! > 0) {
+          setState(() => _showOpeningBalance = false);
+        } else if (details.primaryVelocity! < 0) {
+          setState(() => _showOpeningBalance = true);
+        }
+      },
+      onTap: () {
+        setState(() => _showOpeningBalance = !_showOpeningBalance);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isPositive
+                ? [const Color(0xFF00B894), const Color(0xFF00D2A0)]
+                : [const Color(0xFFFF6B6B), const Color(0xFFFF8E8E)],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Net Balance',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '₹${_netBalanceAll.abs().toStringAsFixed(0)}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              isPositive ? 'Surplus' : 'Deficit',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 10,
-              ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: (isPositive ? const Color(0xFF00B894) : const Color(0xFFFF6B6B)).withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _showOpeningBalance ? Colors.white30 : Colors.white,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _showOpeningBalance ? Colors.white : Colors.white30,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                cardTitle,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '₹${displayAmount.abs().toStringAsFixed(0)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                cardSubtitle,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
