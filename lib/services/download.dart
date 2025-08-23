@@ -44,7 +44,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
 
     final error = await DownloadService.downloadAsPDF(
       expenses: widget.expenses,
-      allExpenses: widget.allExpenses, // Pass all expenses
+      allExpenses: widget.allExpenses,
       periodLabel: widget.periodLabel,
       totalAmount: widget.totalAmount,
       userName: widget.userName,
@@ -62,26 +62,197 @@ class _DownloadDialogState extends State<DownloadDialog> {
   Future<void> _downloadCustomPeriodReport() async {
     if (_isDownloading) return;
 
-    // Show date range picker
+    // Enhanced date range picker with better theme matching
     final DateTimeRange? selectedRange = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
-      saveText: 'Download',
+      initialDateRange: DateTimeRange(
+        start: DateTime.now().subtract(const Duration(days: 30)),
+        end: DateTime.now(),
+      ),
+      saveText: 'Download PDF',
+      helpText: 'SELECT DATE RANGE FOR REPORT',
+      cancelText: 'Cancel',
+      confirmText: 'Generate',
+      fieldStartHintText: 'Start Date',
+      fieldEndHintText: 'End Date',
+      fieldStartLabelText: 'From',
+      fieldEndLabelText: 'To',
+      errorFormatText: 'Enter valid date',
+      errorInvalidText: 'Enter date in valid range',
+      errorInvalidRangeText: 'Invalid range',
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
+            // Main color scheme matching your app theme
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF6C63FF),
+              primary: Color(0xFF6C63FF), // Your main purple
               onPrimary: Colors.white,
+              primaryContainer: Color(0xFFE8E6FF), // Light purple
+              onPrimaryContainer: Color(0xFF4B6EFA),
+              secondary: Color(0xFFFFA726), // Your orange accent
+              onSecondary: Colors.white,
               surface: Colors.white,
-              onSurface: Colors.black,
+              onSurface: Color(0xFF2D3748), // Dark text
+              outline: Color(0xFFE2E8F0), // Light border
+              surfaceVariant: Color(0xFFF8FAFC),
+              onSurfaceVariant: Color(0xFF64748B),
             ),
-            dialogBackgroundColor: Colors.white,
+
+            // Dialog styling
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Colors.white,
+              elevation: 24,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+              ),
+              titleTextStyle: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3748),
+              ),
+            ),
+
+            // AppBar in date picker
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF6C63FF),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              centerTitle: true,
+              titleTextStyle: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+
+            // Text button styling
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFF6C63FF),
+                backgroundColor: Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.hovered)) {
+                    return const Color(0xFF6C63FF).withOpacity(0.1);
+                  }
+                  if (states.contains(MaterialState.pressed)) {
+                    return const Color(0xFF6C63FF).withOpacity(0.2);
+                  }
+                  return null;
+                }),
               ),
+            ),
+
+            // Input decoration for date fields
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 2),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              labelStyle: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              hintStyle: const TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 14,
+              ),
+              helperStyle: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12,
+              ),
+              errorStyle: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+
+            // Calendar theme
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: Colors.white,
+              headerBackgroundColor: const Color(0xFF6C63FF),
+              headerForegroundColor: Colors.white,
+              weekdayStyle: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+              dayStyle: const TextStyle(
+                color: Color(0xFF2D3748),
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+              yearStyle: const TextStyle(
+                color: Color(0xFF2D3748),
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
+              rangeSelectionBackgroundColor: const Color(0xFF6C63FF).withOpacity(0.1),
+              rangePickerBackgroundColor: Colors.white,
+              rangePickerHeaderBackgroundColor: const Color(0xFF6C63FF),
+              rangePickerHeaderForegroundColor: Colors.white,
+              rangeSelectionOverlayColor: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return const Color(0xFF6C63FF).withOpacity(0.3);
+                }
+                return const Color(0xFF6C63FF).withOpacity(0.1);
+              }),
+              dayOverlayColor: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return const Color(0xFF6C63FF);
+                }
+                if (states.contains(MaterialState.hovered)) {
+                  return const Color(0xFF6C63FF).withOpacity(0.1);
+                }
+                if (states.contains(MaterialState.pressed)) {
+                  return const Color(0xFF6C63FF).withOpacity(0.2);
+                }
+                return null;
+              }),
+              todayBackgroundColor: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return const Color(0xFF6C63FF);
+                }
+                return const Color(0xFFFFA726).withOpacity(0.2);
+              }),
+              todayForegroundColor: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.selected)) {
+                  return Colors.white;
+                }
+                return const Color(0xFFFFA726);
+              }),
+            ),
+
+            // Divider theme for calendar
+            dividerTheme: const DividerThemeData(
+              color: Color(0xFFE2E8F0),
+              thickness: 1,
             ),
           ),
           child: child!,
@@ -89,32 +260,27 @@ class _DownloadDialogState extends State<DownloadDialog> {
       },
     );
 
-    if (selectedRange == null) return; // User cancelled
+    if (selectedRange == null) return;
 
     setState(() => _isDownloading = true);
     Navigator.pop(context);
 
-    // Filter expenses for the selected date range from ALL expenses
-    // Fixed: Use proper date comparison with inclusive boundaries
+    // Filter expenses for the selected date range
     final filteredExpenses = widget.allExpenses.where((expense) {
       final expenseDate = expense.date;
-
-      // Get only the date part (ignore time) for accurate comparison
       final expenseDateOnly = DateTime(expenseDate.year, expenseDate.month, expenseDate.day);
       final startDateOnly = DateTime(selectedRange.start.year, selectedRange.start.month, selectedRange.start.day);
       final endDateOnly = DateTime(selectedRange.end.year, selectedRange.end.month, selectedRange.end.day);
 
-      // Use compareTo for inclusive range checking
       return expenseDateOnly.compareTo(startDateOnly) >= 0 &&
           expenseDateOnly.compareTo(endDateOnly) <= 0;
     }).toList();
 
-    // Debug information (you can remove these print statements later)
+    // Debug information
     print('Selected range: ${selectedRange.start} to ${selectedRange.end}');
     print('Total expenses available: ${widget.allExpenses.length}');
     print('Filtered expenses found: ${filteredExpenses.length}');
 
-    // Print sample dates for debugging
     if (widget.allExpenses.isNotEmpty) {
       print('Sample expense dates:');
       for (int i = 0; i < (widget.allExpenses.length > 5 ? 5 : widget.allExpenses.length); i++) {
@@ -122,7 +288,6 @@ class _DownloadDialogState extends State<DownloadDialog> {
       }
     }
 
-    // Check if any expenses found in selected range
     if (filteredExpenses.isEmpty) {
       setState(() => _isDownloading = false);
       _showSnackBar('No expenses found in selected date range!', true);
@@ -142,7 +307,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
 
     final error = await DownloadService.downloadAsPDF(
       expenses: filteredExpenses,
-      allExpenses: widget.allExpenses, // Pass all expenses for opening balance calculation
+      allExpenses: widget.allExpenses,
       periodLabel: periodLabel,
       totalAmount: totalAmount,
       userName: widget.userName,
@@ -195,7 +360,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
               height: 2,
               width: 100,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFA726), // Orange divider
+                color: const Color(0xFFFFA726),
                 borderRadius: BorderRadius.circular(1),
               ),
             ),
@@ -211,6 +376,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
             _buildDownloadOption(
               title: 'Month Report',
               subtitle: 'Download for ${widget.periodLabel}',
+              icon: Icons.calendar_month_rounded,
               color: const Color(0xFFFFA726),
               onTap: _downloadMonthReport,
             ),
@@ -218,6 +384,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
             _buildDownloadOption(
               title: 'Custom Period Report',
               subtitle: 'Select a date range',
+              icon: Icons.date_range_rounded,
               color: const Color(0xFFFFA726),
               onTap: _downloadCustomPeriodReport,
             ),
@@ -233,13 +400,14 @@ class _DownloadDialogState extends State<DownloadDialog> {
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
+    IconData? icon,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: color, // Orange border
+          color: color,
           width: 2,
         ),
         boxShadow: [
@@ -259,6 +427,21 @@ class _DownloadDialogState extends State<DownloadDialog> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
+                if (icon != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: color,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,6 +466,22 @@ class _DownloadDialogState extends State<DownloadDialog> {
                     ],
                   ),
                 ),
+                if (_isDownloading) ...[
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C63FF)),
+                    ),
+                  ),
+                ] else ...[
+                  Icon(
+                    Icons.download_rounded,
+                    color: color,
+                    size: 24,
+                  ),
+                ],
               ],
             ),
           ),
