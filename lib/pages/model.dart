@@ -9,6 +9,7 @@ class ExpenseItem {
   final DateTime date;
   final PaymentMethod paymentMethod;
   final bool isRecurring;
+  final String? customCategoryId; // For custom categories
 
   ExpenseItem({
     required this.id,
@@ -19,6 +20,7 @@ class ExpenseItem {
     required this.date,
     required this.paymentMethod,
     required this.isRecurring,
+    this.customCategoryId,
   });
 
   bool get isIncome => amount < 0;
@@ -34,6 +36,7 @@ class ExpenseItem {
     DateTime? date,
     PaymentMethod? paymentMethod,
     bool? isRecurring,
+    String? customCategoryId,
   }) {
     return ExpenseItem(
       id: id ?? this.id,
@@ -44,6 +47,7 @@ class ExpenseItem {
       date: date ?? this.date,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       isRecurring: isRecurring ?? this.isRecurring,
+      customCategoryId: customCategoryId ?? this.customCategoryId,
     );
   }
 
@@ -53,10 +57,11 @@ class ExpenseItem {
       'title': title,
       'description': description,
       'amount': amount,
-      'category': category.name,
+      'category': category.toString().split('.').last,
       'date': date.toIso8601String(),
-      'paymentMethod': paymentMethod.name,
+      'paymentMethod': paymentMethod.toString().split('.').last,
       'isRecurring': isRecurring,
+      'customCategoryId': customCategoryId,
     };
   }
 
@@ -67,15 +72,16 @@ class ExpenseItem {
       description: json['description'] as String? ?? '',
       amount: (json['amount'] as num).toDouble(),
       category: ExpenseCategory.values.firstWhere(
-            (e) => e.name == json['category'],
+            (e) => e.toString().split('.').last == json['category'],
         orElse: () => ExpenseCategory.other,
       ),
       date: DateTime.parse(json['date'] as String),
       paymentMethod: PaymentMethod.values.firstWhere(
-            (e) => e.name == json['paymentMethod'],
+            (e) => e.toString().split('.').last == json['paymentMethod'],
         orElse: () => PaymentMethod.cash,
       ),
       isRecurring: json['isRecurring'] as bool? ?? false,
+      customCategoryId: json['customCategoryId'] as String?,
     );
   }
 }

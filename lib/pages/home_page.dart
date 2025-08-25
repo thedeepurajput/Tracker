@@ -7,6 +7,9 @@ import '../services/download.dart';
 import './add_expense.dart';
 import './expense_detail.dart';
 import './model.dart';
+import './category_manager.dart';
+import '../services/category_preferences.dart';
+import '../models/custom_category.dart';
 
 enum DateFilterType { day, month, year }
 
@@ -45,6 +48,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final double _fabHeight = 56;
 
   List<ExpenseCategory> _availableCategories = List.from(ExpenseCategory.values);
+  
+  // Track deleted categories
+  List<String> _deletedExpenseCategories = [];
+  List<String> _deletedIncomeCategories = [];
+  
+  // Track custom categories  
+  List<CustomCategory> _customExpenseCategories = [];
+  List<CustomCategory> _customIncomeCategories = [];
+  
+  // Track selected custom category for filtering
+  CustomCategory? _selectedCustomFilterCategory;
 
   @override
   void initState() {
@@ -58,10 +72,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
     _initializeUser();
     _loadTransactionsFromDatabase();
+    _loadCategoryPreferences();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeFabPosition();
     });
+  }
+
+  Future<void> _loadCategoryPreferences() async {
+    try {
+      final deletedExpense = await CategoryPreferences.getDeletedExpenseCategories();
+      final deletedIncome = await CategoryPreferences.getDeletedIncomeCategories();
+      
+      final customExpenseData = await CategoryPreferences.getCustomExpenseCategories();
+      final customIncomeData = await CategoryPreferences.getCustomIncomeCategories();
+      
+      setState(() {
+        _deletedExpenseCategories = deletedExpense;
+        _deletedIncomeCategories = deletedIncome;
+        _customExpenseCategories = customExpenseData.map((data) => CustomCategory.fromJson(data)).toList();
+        _customIncomeCategories = customIncomeData.map((data) => CustomCategory.fromJson(data)).toList();
+      });
+    } catch (e) {
+      print('Error loading category preferences: $e');
+    }
   }
 
   void _initializeFabPosition() {
@@ -124,7 +158,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return _transactions.where((transaction) {
       final matchesSearch = transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           transaction.description.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesFilter = _filterCategory == null || transaction.category == _filterCategory;
+      
+      // Check if transaction matches filter category (including custom categories)
+      bool matchesFilter = true;
+      if (_filterCategory != null || _selectedCustomFilterCategory != null) {
+        if (_selectedCustomFilterCategory != null) {
+          // Filter by custom category
+          matchesFilter = transaction.customCategoryId == _selectedCustomFilterCategory!.id;
+        } else if (_filterCategory != null) {
+          // Filter by default category and ensure it's not a custom category transaction
+          matchesFilter = transaction.category == _filterCategory && transaction.customCategoryId == null;
+        }
+      }
+      
       final matchesDate = _matchesDateFilter(transaction.date);
       return matchesSearch && matchesFilter && matchesDate;
     }).toList();
@@ -139,12 +185,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   List<ExpenseItem> get _allExpenses {
-    return _transactions.where((transaction) =>
-    transaction.isExpense &&
-        (_filterCategory == null || transaction.category == _filterCategory) &&
-        (_searchQuery.isEmpty ||
-            transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            transaction.description.toLowerCase().contains(_searchQuery.toLowerCase()))).toList();
+    return _transactions.where((transaction) {
+      bool matchesCategory = true;
+      if (_filterCategory != null || _selectedCustomFilterCategory != null) {
+        if (_selectedCustomFilterCategory != null) {
+          matchesCategory = transaction.customCategoryId == _selectedCustomFilterCategory!.id;
+        } else if (_filterCategory != null) {
+          matchesCategory = transaction.category == _filterCategory && transaction.customCategoryId == null;
+        }
+      }
+      
+      return transaction.isExpense &&
+          matchesCategory &&
+          (_searchQuery.isEmpty ||
+              transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              transaction.description.toLowerCase().contains(_searchQuery.toLowerCase()));
+    }).toList();
   }
 
   List<ExpenseItem> get _allIncome {
@@ -833,6 +889,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildTransactionCard(ExpenseItem transaction, int index, int groupLength, ThemeData theme) {
     final isIncome = transaction.isIncome;
     final displayAmount = transaction.displayAmount;
+    
+    // Determine category info (custom or default)
+    String categoryLabel;
+    IconData categoryIcon;
+    Color categoryColor;
+    
+    if (transaction.customCategoryId != null) {
+      // Find custom category
+      final customCategory = [..._customExpenseCategories, ..._customIncomeCategories]
+          .firstWhere((cat) => cat.id == transaction.customCategoryId, 
+              orElse: () => CustomCategory(
+                id: '', name: 'Unknown', label: 'Unknown', 
+                icon: Icons.help_outline, color: Colors.grey, isExpense: true));
+      
+      categoryLabel = customCategory.label;
+      categoryIcon = customCategory.icon;
+      categoryColor = customCategory.color;
+    } else {
+      // Use default category
+      categoryLabel = transaction.category.label;
+      categoryIcon = transaction.category.icon;
+      categoryColor = transaction.category.color;
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -857,10 +936,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        isIncome ? const Color(0xFF00B894) : transaction.category.color,
+                        isIncome ? const Color(0xFF00B894) : categoryColor,
                         isIncome
                             ? const Color(0xFF00B894).withOpacity(0.8)
-                            : transaction.category.color.withOpacity(0.8),
+                            : categoryColor.withOpacity(0.8),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -875,7 +954,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ],
                   ),
                   child: Icon(
-                    isIncome ? Icons.trending_up : transaction.category.icon,
+                    isIncome ? Icons.trending_up : categoryIcon,
                     color: Colors.white,
                     size: 26,
                   ),
@@ -898,7 +977,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       Row(
                         children: [
                           Text(
-                            isIncome ? 'Income' : transaction.category.label,
+                            isIncome ? 'Income' : categoryLabel,
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontSize: 10,
                               color: const Color(0xFF718096),
@@ -973,6 +1052,44 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  void _showCategoryManager(bool isExpense) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return CategoryManagerDialog(
+          isExpense: isExpense,
+          deletedCategories: isExpense ? _deletedExpenseCategories : _deletedIncomeCategories,
+          onDeletedCategoriesChanged: (deletedCategories) {
+            setState(() {
+              if (isExpense) {
+                _deletedExpenseCategories = deletedCategories;
+                // If current filter category is deleted, clear the filter
+                if (_filterCategory != null && deletedCategories.contains(_filterCategory.toString().split('.').last)) {
+                  _filterCategory = null;
+                }
+              } else {
+                _deletedIncomeCategories = deletedCategories;
+              }
+            });
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+    ).then((_) {
+      // Reload categories when dialog closes
+      _loadCategoryPreferences();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1040,75 +1157,129 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     icon: const Icon(Icons.file_download_outlined, color: Colors.white),
                     onPressed: _showDownloadDialog,
                   ),
-                  PopupMenuButton<ExpenseCategory?>(
+                  PopupMenuButton<String>(
                     icon: const Icon(Icons.tune, color: Colors.white),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    onSelected: (category) {
-                      setState(() => _filterCategory = category);
+                    onSelected: (value) {
+                      if (value == 'manage') {
+                        _showCategoryManager(true);
+                      } else {
+                        setState(() {
+                          if (value == 'all') {
+                            // Clear all filters
+                            _filterCategory = null;
+                            _selectedCustomFilterCategory = null;
+                          } else if (value.startsWith('custom_')) {
+                            // Custom category selected
+                            final customId = value.substring(7); // Remove 'custom_' prefix
+                            _filterCategory = null;
+                            _selectedCustomFilterCategory = _customExpenseCategories
+                                .firstWhere((cat) => cat.id == customId, 
+                                    orElse: () => _customIncomeCategories
+                                        .firstWhere((cat) => cat.id == customId));
+                          } else {
+                            // Default category selected
+                            _selectedCustomFilterCategory = null;
+                            _filterCategory = ExpenseCategory.values.firstWhere(
+                              (cat) => cat.toString() == value,
+                              orElse: () => ExpenseCategory.other,
+                            );
+                          }
+                        });
+                      }
                     },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: null,
-                        child: Row(
-                          children: [
-                            Icon(Icons.clear_all, color: theme.colorScheme.primary),
-                            const SizedBox(width: 12),
-                            const Text('All Categories'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuDivider(),
-                      ..._availableCategories.map(
-                            (category) => PopupMenuItem(
-                          value: category,
+                    itemBuilder: (context) {
+                      // Filter out deleted categories
+                      final availableCategories = ExpenseCategory.values
+                          .where((cat) => !_deletedExpenseCategories.contains(cat.toString().split('.').last))
+                          .toList();
+                      
+                      // Filter out deleted custom categories
+                      final availableCustomExpense = _customExpenseCategories
+                          .where((cat) => !_deletedExpenseCategories.contains(cat.name))
+                          .toList();
+                      final availableCustomIncome = _customIncomeCategories
+                          .where((cat) => !_deletedIncomeCategories.contains(cat.name))
+                          .toList();
+                      
+                      // Combine all categories for sorting
+                      final allCategories = <Map<String, dynamic>>[];
+                      
+                      // Add default categories
+                      for (final cat in availableCategories) {
+                        allCategories.add({
+                          'type': 'default',
+                          'value': cat.toString(),
+                          'label': cat.label,
+                          'icon': cat.icon,
+                          'color': cat.color,
+                        });
+                      }
+                      
+                      // Add custom categories
+                      for (final cat in [...availableCustomExpense, ...availableCustomIncome]) {
+                        allCategories.add({
+                          'type': 'custom',
+                          'value': 'custom_${cat.id}',
+                          'label': cat.label,
+                          'icon': cat.icon,
+                          'color': cat.color,
+                        });
+                      }
+                      
+                      // Sort alphabetically by label
+                      allCategories.sort((a, b) => (a['label'] as String).compareTo(b['label'] as String));
+                      
+                      return [
+                        PopupMenuItem<String>(
+                          value: 'all',
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: category.color.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Icon(
-                                      category.icon,
-                                      size: 16,
-                                      color: category.color,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(category.label.toUpperCase()),
-                                ],
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 16,
-                                  color: Color(0xFFFF6B6B),
-                                ),
-                                onPressed: () {
-                                  if (_hasTransactionsForCategory(category)) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Cannot delete "${category.label}" as it has associated transactions'),
-                                        backgroundColor: Colors.red,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                    );
-                                  } else {
-                                    _deleteCategory(category, context);
-                                  }
-                                },
-                              ),
+                              Icon(Icons.clear_all, color: theme.colorScheme.primary),
+                              const SizedBox(width: 12),
+                              const Text('All Categories'),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                        const PopupMenuDivider(),
+                        // Show sorted categories
+                        ...allCategories.map(
+                          (categoryData) => PopupMenuItem<String>(
+                            value: categoryData['value'] as String,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: (categoryData['color'] as Color).withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Icon(
+                                    categoryData['icon'] as IconData,
+                                    size: 16,
+                                    color: categoryData['color'] as Color,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text((categoryData['label'] as String).toUpperCase()),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        PopupMenuItem<String>(
+                          value: 'manage',
+                          child: Row(
+                            children: [
+                              Icon(Icons.settings_outlined, color: theme.colorScheme.primary),
+                              const SizedBox(width: 12),
+                              const Text('MANAGE CATEGORIES'),
+                            ],
+                          ),
+                        ),
+                      ];
+                    },
                   ),
                   const SizedBox(width: 8),
                 ],

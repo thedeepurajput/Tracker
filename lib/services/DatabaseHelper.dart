@@ -28,7 +28,7 @@ class ExpenseDatabase {
 
       return await openDatabase(
         path,
-        version: 4, // Increased version for removing description column
+        version: 5, // Increased version for adding customCategoryId column
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         onOpen: (db) async {
@@ -54,7 +54,8 @@ class ExpenseDatabase {
         paymentMethod TEXT NOT NULL,
         isRecurring INTEGER NOT NULL DEFAULT 0,
         transactionType TEXT NOT NULL DEFAULT 'expense',
-        incomeCategory TEXT
+        incomeCategory TEXT,
+        customCategoryId TEXT
       )
     ''');
 
@@ -171,6 +172,16 @@ class ExpenseDatabase {
         await _createDB(db, newVersion);
       }
     }
+
+    if (oldVersion < 5) {
+      // Add customCategoryId column for version 5
+      try {
+        await db.execute('ALTER TABLE transactions ADD COLUMN customCategoryId TEXT');
+      } catch (e) {
+        print('Database upgrade error for version 5: $e');
+        await _createDB(db, newVersion);
+      }
+    }
   }
 
   // Method to set or update user name
@@ -249,12 +260,13 @@ class ExpenseDatabase {
           'id': transaction.id,
           'title': transaction.title,
           'amount': transaction.amount,
-          'category': transaction.category.name,
+          'category': transaction.category.toString().split('.').last,
           'date': transaction.date.toIso8601String(),
-          'paymentMethod': transaction.paymentMethod.name,
+          'paymentMethod': transaction.paymentMethod.toString().split('.').last,
           'isRecurring': transaction.isRecurring ? 1 : 0,
           'transactionType': transactionType,
           'incomeCategory': isIncome ? _getIncomeCategoryFromTitle(transaction.title) : null,
+          'customCategoryId': transaction.customCategoryId,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -280,15 +292,17 @@ class ExpenseDatabase {
           title: json['title'] as String,
           amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.name == json['category'],
+                (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.name == json['paymentMethod'],
+                (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, description: '',
+          isRecurring: (json['isRecurring'] as int?) == 1, 
+          description: '',
+          customCategoryId: json['customCategoryId'] as String?,
         );
       }).toList();
     } catch (e) {
@@ -317,15 +331,17 @@ class ExpenseDatabase {
           title: json['title'] as String,
           amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.name == json['category'],
+                (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.name == json['paymentMethod'],
+                (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, description: '',
+          isRecurring: (json['isRecurring'] as int?) == 1, 
+          description: '',
+          customCategoryId: json['customCategoryId'] as String?,
         );
       }).toList();
     } catch (e) {
@@ -349,15 +365,17 @@ class ExpenseDatabase {
           title: json['title'] as String,
           amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.name == json['category'],
+                (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.name == json['paymentMethod'],
+                (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, description: '',
+          isRecurring: (json['isRecurring'] as int?) == 1, 
+          description: '',
+          customCategoryId: json['customCategoryId'] as String?,
         );
       }).toList();
     } catch (e) {
