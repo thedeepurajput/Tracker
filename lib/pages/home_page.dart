@@ -7,9 +7,6 @@ import '../services/download.dart';
 import './add_expense.dart';
 import './expense_detail.dart';
 import './model.dart';
-import './category_manager.dart';
-import '../services/category_preferences.dart';
-import '../models/custom_category.dart';
 
 enum DateFilterType { day, month, year }
 
@@ -47,19 +44,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final double _fabWidth = 200;
   final double _fabHeight = 56;
 
-  List<ExpenseCategory> _availableCategories = List.from(ExpenseCategory.values);
-  
-  // Track deleted categories
-  List<String> _deletedExpenseCategories = [];
-  List<String> _deletedIncomeCategories = [];
-  
-  // Track custom categories  
-  List<CustomCategory> _customExpenseCategories = [];
-  List<CustomCategory> _customIncomeCategories = [];
-  
-  // Track selected custom category for filtering
-  CustomCategory? _selectedCustomFilterCategory;
-
   @override
   void initState() {
     super.initState();
@@ -72,30 +56,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
     _initializeUser();
     _loadTransactionsFromDatabase();
-    _loadCategoryPreferences();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeFabPosition();
     });
-  }
-
-  Future<void> _loadCategoryPreferences() async {
-    try {
-      final deletedExpense = await CategoryPreferences.getDeletedExpenseCategories();
-      final deletedIncome = await CategoryPreferences.getDeletedIncomeCategories();
-      
-      final customExpenseData = await CategoryPreferences.getCustomExpenseCategories();
-      final customIncomeData = await CategoryPreferences.getCustomIncomeCategories();
-      
-      setState(() {
-        _deletedExpenseCategories = deletedExpense;
-        _deletedIncomeCategories = deletedIncome;
-        _customExpenseCategories = customExpenseData.map((data) => CustomCategory.fromJson(data)).toList();
-        _customIncomeCategories = customIncomeData.map((data) => CustomCategory.fromJson(data)).toList();
-      });
-    } catch (e) {
-      print('Error loading category preferences: $e');
-    }
   }
 
   void _initializeFabPosition() {
@@ -108,19 +72,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         size.height - _fabHeight - 16 - padding.bottom,
       );
       _fabPosition = _defaultFabPosition;
-      print('FAB initialized: $_fabPosition, screen size: $_screenSize, safe area padding: $padding');
+      print(
+          'FAB initialized: $_fabPosition, screen size: $_screenSize, safe area padding: $padding');
     });
   }
 
   void _initializeUser() async {
     try {
-      final dbUserName = await ExpenseDatabase.instance.getUserName(_defaultUserId);
+      final dbUserName =
+          await ExpenseDatabase.instance.getUserName(_defaultUserId);
       if (dbUserName != null && dbUserName.isNotEmpty) {
         setState(() {
           _userName = dbUserName;
         });
       } else {
-        final initialName = widget.userName.isNotEmpty ? widget.userName : 'User';
+        final initialName =
+            widget.userName.isNotEmpty ? widget.userName : 'User';
         await ExpenseDatabase.instance.setUserName(_defaultUserId, initialName);
         setState(() {
           _userName = initialName;
@@ -145,7 +112,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final transactions = await ExpenseDatabase.instance.getAllExpenses();
     print('Loaded transactions: ${transactions.length}');
     for (var t in transactions) {
-      print('Transaction: ${t.title}, Date: ${t.date}, IsExpense: ${t.isExpense}');
+      print(
+          'Transaction: ${t.title}, Date: ${t.date}, IsExpense: ${t.isExpense}');
     }
     setState(() {
       _transactions = transactions;
@@ -156,63 +124,66 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   List<ExpenseItem> get _filteredTransactions {
     return _transactions.where((transaction) {
-      final matchesSearch = transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          transaction.description.toLowerCase().contains(_searchQuery.toLowerCase());
-      
-      // Check if transaction matches filter category (including custom categories)
-      bool matchesFilter = true;
-      if (_filterCategory != null || _selectedCustomFilterCategory != null) {
-        if (_selectedCustomFilterCategory != null) {
-          // Filter by custom category
-          matchesFilter = transaction.customCategoryId == _selectedCustomFilterCategory!.id;
-        } else if (_filterCategory != null) {
-          // Filter by default category and ensure it's not a custom category transaction
-          matchesFilter = transaction.category == _filterCategory && transaction.customCategoryId == null;
-        }
-      }
-      
+      final matchesSearch = transaction.title
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
+          transaction.description
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase());
+
+      final matchesFilter =
+          _filterCategory == null || transaction.category == _filterCategory;
       final matchesDate = _matchesDateFilter(transaction.date);
       return matchesSearch && matchesFilter && matchesDate;
     }).toList();
   }
 
   List<ExpenseItem> get _filteredExpenses {
-    return _filteredTransactions.where((transaction) => transaction.isExpense).toList();
+    return _filteredTransactions
+        .where((transaction) => transaction.isExpense)
+        .toList();
   }
 
   List<ExpenseItem> get _filteredIncome {
-    return _filteredTransactions.where((transaction) => transaction.isIncome).toList();
+    return _filteredTransactions
+        .where((transaction) => transaction.isIncome)
+        .toList();
   }
 
   List<ExpenseItem> get _allExpenses {
     return _transactions.where((transaction) {
-      bool matchesCategory = true;
-      if (_filterCategory != null || _selectedCustomFilterCategory != null) {
-        if (_selectedCustomFilterCategory != null) {
-          matchesCategory = transaction.customCategoryId == _selectedCustomFilterCategory!.id;
-        } else if (_filterCategory != null) {
-          matchesCategory = transaction.category == _filterCategory && transaction.customCategoryId == null;
-        }
-      }
-      
+      final matchesCategory =
+          _filterCategory == null || transaction.category == _filterCategory;
+
       return transaction.isExpense &&
           matchesCategory &&
           (_searchQuery.isEmpty ||
-              transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              transaction.description.toLowerCase().contains(_searchQuery.toLowerCase()));
+              transaction.title
+                  .toLowerCase()
+                  .contains(_searchQuery.toLowerCase()) ||
+              transaction.description
+                  .toLowerCase()
+                  .contains(_searchQuery.toLowerCase()));
     }).toList();
   }
 
   List<ExpenseItem> get _allIncome {
-    return _transactions.where((transaction) =>
-    transaction.isIncome &&
-        (_searchQuery.isEmpty ||
-            transaction.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            transaction.description.toLowerCase().contains(_searchQuery.toLowerCase()))).toList();
+    return _transactions
+        .where((transaction) =>
+            transaction.isIncome &&
+            (_searchQuery.isEmpty ||
+                transaction.title
+                    .toLowerCase()
+                    .contains(_searchQuery.toLowerCase()) ||
+                transaction.description
+                    .toLowerCase()
+                    .contains(_searchQuery.toLowerCase())))
+        .toList();
   }
 
   double get _totalAllExpenses {
-    return _allExpenses.fold(0.0, (sum, expense) => sum + expense.displayAmount);
+    return _allExpenses.fold(
+        0.0, (sum, expense) => sum + expense.displayAmount);
   }
 
   double get _totalAllIncome {
@@ -224,11 +195,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   double get _totalExpenses {
-    return _filteredExpenses.fold(0.0, (sum, expense) => sum + expense.displayAmount);
+    return _filteredExpenses.fold(
+        0.0, (sum, expense) => sum + expense.displayAmount);
   }
 
   double get _totalIncome {
-    return _filteredIncome.fold(0.0, (sum, income) => sum + income.displayAmount);
+    return _filteredIncome.fold(
+        0.0, (sum, income) => sum + income.displayAmount);
   }
 
   double get _netBalance {
@@ -237,9 +210,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   double get _openingBalance {
     final currentPeriodStart = _getPeriodStartDate();
-    final transactionsBeforePeriod = _transactions.where((transaction) =>
-        transaction.date.isBefore(currentPeriodStart)
-    ).toList();
+    final transactionsBeforePeriod = _transactions
+        .where((transaction) => transaction.date.isBefore(currentPeriodStart))
+        .toList();
 
     final incomeBeforePeriod = transactionsBeforePeriod
         .where((t) => t.isIncome)
@@ -255,7 +228,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   DateTime _getPeriodStartDate() {
     switch (_dateFilterType) {
       case DateFilterType.day:
-        return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+        return DateTime(
+            _selectedDate.year, _selectedDate.month, _selectedDate.day);
       case DateFilterType.month:
         return DateTime(_selectedYear, _selectedMonth, 1);
       case DateFilterType.year:
@@ -263,29 +237,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
-  Map<ExpenseCategory, double> get _categoryTotals {
-    final totals = <ExpenseCategory, double>{};
-    final filteredExpenses = _filteredExpenses;
-    for (final expense in filteredExpenses) {
-      totals[expense.category] = (totals[expense.category] ?? 0.0) + expense.displayAmount;
-    }
-    return totals;
-  }
-
   bool _matchesDateFilter(DateTime transactionDate) {
     switch (_dateFilterType) {
       case DateFilterType.day:
         return _isSameDay(transactionDate, _selectedDate);
       case DateFilterType.month:
-        return transactionDate.year == _selectedYear && transactionDate.month == _selectedMonth;
+        return transactionDate.year == _selectedYear &&
+            transactionDate.month == _selectedMonth;
       case DateFilterType.year:
         return transactionDate.year == _selectedYear;
     }
-    throw StateError('Invalid DateFilterType');
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
   }
 
   String get _periodLabel {
@@ -293,23 +260,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case DateFilterType.day:
         return DateFormat('MMM dd, yyyy').format(_selectedDate);
       case DateFilterType.month:
-        return DateFormat('MMMM yyyy').format(DateTime(_selectedYear, _selectedMonth));
+        return DateFormat('MMMM yyyy')
+            .format(DateTime(_selectedYear, _selectedMonth));
       case DateFilterType.year:
         return _selectedYear.toString();
     }
-    throw StateError('Invalid DateFilterType');
-  }
-
-  String get _periodTitle {
-    switch (_dateFilterType) {
-      case DateFilterType.day:
-        return 'Today\'s Summary';
-      case DateFilterType.month:
-        return 'Monthly Summary';
-      case DateFilterType.year:
-        return 'Yearly Summary';
-    }
-    throw StateError('Invalid DateFilterType');
   }
 
   Map<String, List<ExpenseItem>> _groupTransactionsByDay() {
@@ -320,7 +275,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final transactionDate = transaction.date;
       if (_isSameDay(transactionDate, now)) {
         key = 'Today';
-      } else if (_isSameDay(transactionDate, now.subtract(const Duration(days: 1)))) {
+      } else if (_isSameDay(
+          transactionDate, now.subtract(const Duration(days: 1)))) {
         key = 'Yesterday';
       } else {
         key = DateFormat('MMM dd, yyyy').format(transactionDate);
@@ -340,13 +296,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           final aDate = a.key == 'Today'
               ? now
               : a.key == 'Yesterday'
-              ? now.subtract(const Duration(days: 1))
-              : DateFormat('MMM dd, yyyy').parse(a.key);
+                  ? now.subtract(const Duration(days: 1))
+                  : DateFormat('MMM dd, yyyy').parse(a.key);
           final bDate = b.key == 'Today'
               ? now
               : b.key == 'Yesterday'
-              ? now.subtract(const Duration(days: 1))
-              : DateFormat('MMM dd, yyyy').parse(b.key);
+                  ? now.subtract(const Duration(days: 1))
+                  : DateFormat('MMM dd, yyyy').parse(b.key);
           return bDate.compareTo(aDate);
         }),
     );
@@ -358,10 +314,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (_filteredTransactions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('No transactions to download for the selected period'),
+          content:
+              const Text('No transactions to download for the selected period'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       return;
@@ -408,11 +366,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(child: _buildFilterTypeChipWithState(DateFilterType.day, 'Day', setDialogState)),
+                      Expanded(
+                          child: _buildFilterTypeChipWithState(
+                              DateFilterType.day, 'Day', setDialogState)),
                       const SizedBox(width: 8),
-                      Expanded(child: _buildFilterTypeChipWithState(DateFilterType.month, 'Month', setDialogState)),
+                      Expanded(
+                          child: _buildFilterTypeChipWithState(
+                              DateFilterType.month, 'Month', setDialogState)),
                       const SizedBox(width: 8),
-                      Expanded(child: _buildFilterTypeChipWithState(DateFilterType.year, 'Year', setDialogState)),
+                      Expanded(
+                          child: _buildFilterTypeChipWithState(
+                              DateFilterType.year, 'Year', setDialogState)),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -441,7 +405,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                       child: const Text(
                         'Apply Filter',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -454,7 +419,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFilterTypeChipWithState(DateFilterType type, String label, StateSetter setDialogState) {
+  Widget _buildFilterTypeChipWithState(
+      DateFilterType type, String label, StateSetter setDialogState) {
     final isSelected = _dateFilterType == type;
     return GestureDetector(
       onTap: () {
@@ -473,7 +439,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF6C63FF) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: const Color(0xFF6C63FF), width: 2) : null,
+          border: isSelected
+              ? Border.all(color: const Color(0xFF6C63FF), width: 2)
+              : null,
         ),
         child: Text(
           label,
@@ -564,7 +532,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                     );
                   }),
-                  scrollController: FixedExtentScrollController(initialItem: _selectedMonth - 1),
+                  scrollController: FixedExtentScrollController(
+                      initialItem: _selectedMonth - 1),
                 ),
               ),
             ),
@@ -581,7 +550,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   diameterRatio: 1.5,
                   onSelectedItemChanged: (int index) {
                     HapticFeedback.lightImpact();
-                    setDialogState(() => _selectedYear = DateTime.now().year - index);
+                    setDialogState(
+                        () => _selectedYear = DateTime.now().year - index);
                   },
                   children: List<Widget>.generate(10, (index) {
                     final year = DateTime.now().year - index;
@@ -695,7 +665,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.grey.shade300),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
           style: const TextStyle(fontSize: 16),
         ),
@@ -712,7 +683,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
                 try {
-                  await ExpenseDatabase.instance.setUserName(_defaultUserId, newName);
+                  await ExpenseDatabase.instance
+                      .setUserName(_defaultUserId, newName);
                   setState(() {
                     _userName = newName;
                   });
@@ -722,7 +694,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       content: Text('Username updated to "$newName"'),
                       backgroundColor: Colors.green,
                       behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   );
                 } catch (e) {
@@ -731,7 +704,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       content: Text('Failed to update username: $e'),
                       backgroundColor: Colors.red,
                       behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   );
                 }
@@ -784,8 +758,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _updateFabPosition(DragUpdateDetails details) {
     setState(() {
       _fabPosition = Offset(
-        (_fabPosition.dx + details.delta.dx).clamp(0.0, _screenSize.width - _fabWidth - MediaQuery.of(context).padding.right),
-        (_fabPosition.dy + details.delta.dy).clamp(0.0, _screenSize.height - _fabHeight - MediaQuery.of(context).padding.bottom),
+        (_fabPosition.dx + details.delta.dx).clamp(
+            0.0,
+            _screenSize.width -
+                _fabWidth -
+                MediaQuery.of(context).padding.right),
+        (_fabPosition.dy + details.delta.dy).clamp(
+            0.0,
+            _screenSize.height -
+                _fabHeight -
+                MediaQuery.of(context).padding.bottom),
       );
       print('FAB moved to: $_fabPosition');
     });
@@ -823,7 +805,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               content: const Text('FAB position reset to default'),
               backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
           );
         },
@@ -837,7 +820,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6C63FF).withOpacity(_isDragging ? 0.4 : 0.3),
+                color: const Color(0xFF6C63FF)
+                    .withOpacity(_isDragging ? 0.4 : 0.3),
                 blurRadius: _isDragging ? 16 : 12,
                 offset: Offset(0, _isDragging ? 8 : 6),
                 spreadRadius: _isDragging ? 2 : 0,
@@ -845,9 +829,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ],
             border: _isDragging
                 ? Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 2,
-            )
+                    color: Colors.white.withOpacity(0.3),
+                    width: 2,
+                  )
                 : null,
           ),
           child: AnimatedContainer(
@@ -886,32 +870,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTransactionCard(ExpenseItem transaction, int index, int groupLength, ThemeData theme) {
+  Widget _buildTransactionCard(
+      ExpenseItem transaction, int index, int groupLength, ThemeData theme) {
     final isIncome = transaction.isIncome;
     final displayAmount = transaction.displayAmount;
-    
-    // Determine category info (custom or default)
-    String categoryLabel;
-    IconData categoryIcon;
-    Color categoryColor;
-    
-    if (transaction.customCategoryId != null) {
-      // Find custom category
-      final customCategory = [..._customExpenseCategories, ..._customIncomeCategories]
-          .firstWhere((cat) => cat.id == transaction.customCategoryId, 
-              orElse: () => CustomCategory(
-                id: '', name: 'Unknown', label: 'Unknown', 
-                icon: Icons.help_outline, color: Colors.grey, isExpense: true));
-      
-      categoryLabel = customCategory.label;
-      categoryIcon = customCategory.icon;
-      categoryColor = customCategory.color;
-    } else {
-      // Use default category
-      categoryLabel = transaction.category.label;
-      categoryIcon = transaction.category.icon;
-      categoryColor = transaction.category.color;
-    }
+
+    // Use default category
+    final categoryLabel = transaction.category.label;
+    final categoryIcon = transaction.category.icon;
+    final categoryColor = transaction.category.color;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -994,7 +961,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   '${isIncome ? '+' : '-'}₹${displayAmount.abs().toStringAsFixed(0)}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: isIncome ? const Color(0xFF00B894) : const Color(0xFFFF6B6B),
+                    color: isIncome
+                        ? const Color(0xFF00B894)
+                        : const Color(0xFFFF6B6B),
                   ),
                 ),
               ],
@@ -1030,66 +999,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  bool _hasTransactionsForCategory(ExpenseCategory category) {
-    return _transactions.any((transaction) => transaction.category == category);
-  }
-
-  void _deleteCategory(ExpenseCategory category, BuildContext context) {
-    setState(() {
-      _availableCategories.remove(category);
-      if (_filterCategory == category) {
-        _filterCategory = null;
-      }
-    });
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Category "${category.label}" deleted'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  void _showCategoryManager(bool isExpense) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return CategoryManagerDialog(
-          isExpense: isExpense,
-          deletedCategories: isExpense ? _deletedExpenseCategories : _deletedIncomeCategories,
-          onDeletedCategoriesChanged: (deletedCategories) {
-            setState(() {
-              if (isExpense) {
-                _deletedExpenseCategories = deletedCategories;
-                // If current filter category is deleted, clear the filter
-                if (_filterCategory != null && deletedCategories.contains(_filterCategory.toString().split('.').last)) {
-                  _filterCategory = null;
-                }
-              } else {
-                _deletedIncomeCategories = deletedCategories;
-              }
-            });
-          },
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
-      },
-    ).then((_) {
-      // Reload categories when dialog closes
-      _loadCategoryPreferences();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1115,37 +1024,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 elevation: 0,
                 title: _isSearching
                     ? Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: TextField(
-                    autofocus: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Search transactions...',
-                      hintStyle: TextStyle(color: Colors.white70),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      prefixIcon: Icon(Icons.search, color: Colors.white70),
-                    ),
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                  ),
-                )
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: TextField(
+                          autofocus: true,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'Search transactions...',
+                            hintStyle: TextStyle(color: Colors.white70),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            prefixIcon:
+                                Icon(Icons.search, color: Colors.white70),
+                          ),
+                          onChanged: (value) =>
+                              setState(() => _searchQuery = value),
+                        ),
+                      )
                     : GestureDetector(
-                  onTap: _showEditUsernameDialog,
-                  child: Text(
-                    'Hello, ${_userName.isEmpty ? 'User' : _userName}! 👋',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                        onTap: _showEditUsernameDialog,
+                        child: Text(
+                          'Hello, ${_userName.isEmpty ? 'User' : _userName}! 👋',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                 actions: [
                   IconButton(
-                    icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white),
+                    icon: Icon(_isSearching ? Icons.close : Icons.search,
+                        color: Colors.white),
                     onPressed: () {
                       setState(() {
                         _isSearching = !_isSearching;
@@ -1154,128 +1067,63 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.file_download_outlined, color: Colors.white),
+                    icon: const Icon(Icons.file_download_outlined,
+                        color: Colors.white),
                     onPressed: _showDownloadDialog,
                   ),
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.tune, color: Colors.white),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15)),
                     onSelected: (value) {
-                      if (value == 'manage') {
-                        _showCategoryManager(true);
-                      } else {
-                        setState(() {
-                          if (value == 'all') {
-                            // Clear all filters
-                            _filterCategory = null;
-                            _selectedCustomFilterCategory = null;
-                          } else if (value.startsWith('custom_')) {
-                            // Custom category selected
-                            final customId = value.substring(7); // Remove 'custom_' prefix
-                            _filterCategory = null;
-                            _selectedCustomFilterCategory = _customExpenseCategories
-                                .firstWhere((cat) => cat.id == customId, 
-                                    orElse: () => _customIncomeCategories
-                                        .firstWhere((cat) => cat.id == customId));
-                          } else {
-                            // Default category selected
-                            _selectedCustomFilterCategory = null;
-                            _filterCategory = ExpenseCategory.values.firstWhere(
-                              (cat) => cat.toString() == value,
-                              orElse: () => ExpenseCategory.other,
-                            );
-                          }
-                        });
-                      }
+                      setState(() {
+                        if (value == 'all') {
+                          _filterCategory = null;
+                        } else {
+                          _filterCategory = ExpenseCategory.values.firstWhere(
+                            (cat) => cat.toString() == value,
+                            orElse: () => ExpenseCategory.other,
+                          );
+                        }
+                      });
                     },
                     itemBuilder: (context) {
-                      // Filter out deleted categories
-                      final availableCategories = ExpenseCategory.values
-                          .where((cat) => !_deletedExpenseCategories.contains(cat.toString().split('.').last))
-                          .toList();
-                      
-                      // Filter out deleted custom categories
-                      final availableCustomExpense = _customExpenseCategories
-                          .where((cat) => !_deletedExpenseCategories.contains(cat.name))
-                          .toList();
-                      final availableCustomIncome = _customIncomeCategories
-                          .where((cat) => !_deletedIncomeCategories.contains(cat.name))
-                          .toList();
-                      
-                      // Combine all categories for sorting
-                      final allCategories = <Map<String, dynamic>>[];
-                      
-                      // Add default categories
-                      for (final cat in availableCategories) {
-                        allCategories.add({
-                          'type': 'default',
-                          'value': cat.toString(),
-                          'label': cat.label,
-                          'icon': cat.icon,
-                          'color': cat.color,
-                        });
-                      }
-                      
-                      // Add custom categories
-                      for (final cat in [...availableCustomExpense, ...availableCustomIncome]) {
-                        allCategories.add({
-                          'type': 'custom',
-                          'value': 'custom_${cat.id}',
-                          'label': cat.label,
-                          'icon': cat.icon,
-                          'color': cat.color,
-                        });
-                      }
-                      
-                      // Sort alphabetically by label
-                      allCategories.sort((a, b) => (a['label'] as String).compareTo(b['label'] as String));
-                      
                       return [
                         PopupMenuItem<String>(
                           value: 'all',
                           child: Row(
                             children: [
-                              Icon(Icons.clear_all, color: theme.colorScheme.primary),
+                              Icon(Icons.clear_all,
+                                  color: theme.colorScheme.primary),
                               const SizedBox(width: 12),
                               const Text('All Categories'),
                             ],
                           ),
                         ),
                         const PopupMenuDivider(),
-                        // Show sorted categories
-                        ...allCategories.map(
-                          (categoryData) => PopupMenuItem<String>(
-                            value: categoryData['value'] as String,
+                        // Show all categories
+                        ...ExpenseCategory.values.map(
+                          (category) => PopupMenuItem<String>(
+                            value: category.toString(),
                             child: Row(
                               children: [
                                 Container(
                                   width: 24,
                                   height: 24,
                                   decoration: BoxDecoration(
-                                    color: (categoryData['color'] as Color).withOpacity(0.2),
+                                    color: category.color.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Icon(
-                                    categoryData['icon'] as IconData,
+                                    category.icon,
                                     size: 16,
-                                    color: categoryData['color'] as Color,
+                                    color: category.color,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                Text((categoryData['label'] as String).toUpperCase()),
+                                Text(category.label.toUpperCase()),
                               ],
                             ),
-                          ),
-                        ),
-                        const PopupMenuDivider(),
-                        PopupMenuItem<String>(
-                          value: 'manage',
-                          child: Row(
-                            children: [
-                              Icon(Icons.settings_outlined, color: theme.colorScheme.primary),
-                              const SizedBox(width: 12),
-                              const Text('MANAGE CATEGORIES'),
-                            ],
                           ),
                         ),
                       ];
@@ -1327,48 +1175,56 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               _isLoading
                   ? const SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C63FF)),
-                    ),
-                  ),
-                ),
-              )
-                  : groupedTransactions.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState())
-                  : SliverList(
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                    final dayKey = groupedTransactions.keys.elementAt(index);
-                    final transactions = groupedTransactions[dayKey]!;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text(
-                            dayKey,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF2D3748),
-                            ),
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF6C63FF)),
                           ),
                         ),
-                        ...transactions.asMap().entries.map((entry) {
-                          final transaction = entry.value;
-                          return FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: _buildTransactionCard(transaction, entry.key, transactions.length, theme),
-                          );
-                        }).toList(),
-                      ],
-                    );
-                  },
-                  childCount: groupedTransactions.length,
-                ),
-              ),
+                      ),
+                    )
+                  : groupedTransactions.isEmpty
+                      ? SliverToBoxAdapter(child: _buildEmptyState())
+                      : SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final dayKey =
+                                  groupedTransactions.keys.elementAt(index);
+                              final transactions = groupedTransactions[dayKey]!;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 16, 16, 8),
+                                    child: Text(
+                                      dayKey,
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF2D3748),
+                                      ),
+                                    ),
+                                  ),
+                                  ...transactions.asMap().entries.map((entry) {
+                                    final transaction = entry.value;
+                                    return FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: _buildTransactionCard(
+                                          transaction,
+                                          entry.key,
+                                          transactions.length,
+                                          theme),
+                                    );
+                                  }).toList(),
+                                ],
+                              );
+                            },
+                            childCount: groupedTransactions.length,
+                          ),
+                        ),
             ],
           ),
           _buildFAB(),
@@ -1406,8 +1262,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       _dateFilterType == DateFilterType.day
                           ? Icons.calendar_today_outlined
                           : _dateFilterType == DateFilterType.month
-                          ? Icons.calendar_view_month_outlined
-                          : Icons.calendar_month_outlined,
+                              ? Icons.calendar_view_month_outlined
+                              : Icons.calendar_month_outlined,
                       color: const Color(0xFF6C63FF),
                       size: 20,
                     ),
@@ -1447,8 +1303,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildBalanceCard() {
-    final isPositive = _showOpeningBalance ? _openingBalance >= 0 : _netBalanceAll >= 0;
-    final displayAmount = _showOpeningBalance ? _openingBalance : _netBalanceAll;
+    final isPositive =
+        _showOpeningBalance ? _openingBalance >= 0 : _netBalanceAll >= 0;
+    final displayAmount =
+        _showOpeningBalance ? _openingBalance : _netBalanceAll;
     final cardTitle = _showOpeningBalance ? 'Opening Balance' : 'Net Balance';
     final cardSubtitle = _showOpeningBalance
         ? 'Before ${_periodLabel}'
@@ -1475,7 +1333,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: (isPositive ? const Color(0xFF00B894) : const Color(0xFFFF6B6B)).withOpacity(0.3),
+              color: (isPositive
+                      ? const Color(0xFF00B894)
+                      : const Color(0xFFFF6B6B))
+                  .withOpacity(0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1493,7 +1354,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: _showOpeningBalance ? Colors.white30 : Colors.white,
+                      color:
+                          _showOpeningBalance ? Colors.white30 : Colors.white,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
@@ -1502,7 +1364,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: _showOpeningBalance ? Colors.white : Colors.white30,
+                      color:
+                          _showOpeningBalance ? Colors.white : Colors.white30,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),

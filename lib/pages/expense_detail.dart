@@ -15,7 +15,8 @@ class ExpenseDetailsBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<ExpenseDetailsBottomSheet> createState() => _ExpenseDetailsBottomSheetState();
+  State<ExpenseDetailsBottomSheet> createState() =>
+      _ExpenseDetailsBottomSheetState();
 }
 
 class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
@@ -32,8 +33,10 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.expense.title);
-    _descriptionController = TextEditingController(text: widget.expense.description);
-    _amountController = TextEditingController(text: widget.expense.amount.toString());
+    _descriptionController =
+        TextEditingController(text: widget.expense.description);
+    _amountController =
+        TextEditingController(text: widget.expense.amount.toString());
     _selectedCategory = widget.expense.category;
     _selectedPaymentMethod = widget.expense.paymentMethod;
     _selectedDate = widget.expense.date;
@@ -156,7 +159,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
           return Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -179,7 +183,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: _getCategoryColor(widget.expense.category).withOpacity(0.1),
+                          color: _getCategoryColor(widget.expense.category)
+                              .withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
@@ -214,7 +219,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                           icon: const Icon(Icons.edit),
                           style: IconButton.styleFrom(
                             backgroundColor: theme.colorScheme.primaryContainer,
-                            foregroundColor: theme.colorScheme.onPrimaryContainer,
+                            foregroundColor:
+                                theme.colorScheme.onPrimaryContainer,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -344,7 +350,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                   border: OutlineInputBorder(),
                   prefixText: '₹ ',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (_) => setState(() {}),
               )
             else
@@ -390,7 +397,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                     value: category,
                     child: Row(
                       children: [
-                        Icon(_getCategoryIcon(category), color: _getCategoryColor(category), size: 20),
+                        Icon(_getCategoryIcon(category),
+                            color: _getCategoryColor(category), size: 20),
                         const SizedBox(width: 8),
                         Text(category.name),
                       ],
@@ -407,7 +415,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _getCategoryColor(widget.expense.category).withOpacity(0.1),
+                      color: _getCategoryColor(widget.expense.category)
+                          .withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -460,7 +469,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                   );
                 }).toList(),
                 onChanged: (value) {
-                  if (value != null) setState(() => _selectedPaymentMethod = value);
+                  if (value != null)
+                    setState(() => _selectedPaymentMethod = value);
                 },
               )
             else
@@ -517,7 +527,6 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
               ),
             ),
             const SizedBox(height: 16),
-
             if (_isEditing)
               InkWell(
                 onTap: _pickDate,
@@ -562,7 +571,6 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
               ),
             ),
             const SizedBox(height: 8),
-
             if (_isEditing)
               SwitchListTile(
                 title: const Text('Recurring Expense'),
@@ -575,7 +583,9 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                 children: [
                   Icon(
                     _isRecurring ? Icons.repeat : Icons.today,
-                    color: _isRecurring ? Colors.green : theme.colorScheme.onSurfaceVariant,
+                    color: _isRecurring
+                        ? Colors.green
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -591,13 +601,13 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   }
 
   Widget _buildDetailRow(
-      String label,
-      String value,
-      IconData icon,
-      ThemeData theme, {
-        Color? valueColor,
-        bool isLarge = false,
-      }) {
+    String label,
+    String value,
+    IconData icon,
+    ThemeData theme, {
+    Color? valueColor,
+    bool isLarge = false,
+  }) {
     return Row(
       children: [
         Icon(icon, color: theme.colorScheme.onSurfaceVariant),
@@ -616,12 +626,12 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
                 value,
                 style: isLarge
                     ? theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: valueColor,
-                )
+                        fontWeight: FontWeight.bold,
+                        color: valueColor,
+                      )
                     : theme.textTheme.bodyLarge?.copyWith(
-                  color: valueColor,
-                ),
+                        color: valueColor,
+                      ),
               ),
             ],
           ),
@@ -680,7 +690,7 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
     switch (method) {
       case PaymentMethod.cash:
         return Icons.money;
-      case PaymentMethod.cash:
+      case PaymentMethod.creditCard:
         return Icons.credit_card;
       case PaymentMethod.upi:
         return Icons.payment;

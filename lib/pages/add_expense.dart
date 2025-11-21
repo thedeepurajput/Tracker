@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/DatabaseHelper.dart';
 import 'model.dart';
-import 'category_manager.dart';
-import '../services/category_preferences.dart';
-import '../models/custom_category.dart';
 
 class AddTransaction extends StatefulWidget {
   final DateTime selectedDate;
@@ -27,21 +24,9 @@ class _AddTransactionState extends State<AddTransaction>
   bool _isExpense = true;
   ExpenseCategory _selectedExpenseCategory = ExpenseCategory.food;
   IncomeCategory _selectedIncomeCategory = IncomeCategory.salary;
-  PaymentMethod _selectedPaymentMethod = PaymentMethod.cash;
+  PaymentMethod _selectedPaymentMethod = PaymentMethod.upi;
   late DateTime _selectedDate;
   bool _isRecurring = false;
-  
-  // Track selected custom categories
-  CustomCategory? _selectedCustomExpenseCategory;
-  CustomCategory? _selectedCustomIncomeCategory;
-  
-  // Track deleted categories
-  List<String> _deletedExpenseCategories = [];
-  List<String> _deletedIncomeCategories = [];
-  
-  // Track custom categories
-  List<CustomCategory> _customExpenseCategories = [];
-  List<CustomCategory> _customIncomeCategories = [];
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -66,27 +51,7 @@ class _AddTransactionState extends State<AddTransaction>
       parent: _animationController,
       curve: Curves.easeOut,
     ));
-    _loadCategoryPreferences();
     _animationController.forward();
-  }
-
-  Future<void> _loadCategoryPreferences() async {
-    try {
-      final deletedExpense = await CategoryPreferences.getDeletedExpenseCategories();
-      final deletedIncome = await CategoryPreferences.getDeletedIncomeCategories();
-      
-      final customExpenseData = await CategoryPreferences.getCustomExpenseCategories();
-      final customIncomeData = await CategoryPreferences.getCustomIncomeCategories();
-      
-      setState(() {
-        _deletedExpenseCategories = deletedExpense;
-        _deletedIncomeCategories = deletedIncome;
-        _customExpenseCategories = customExpenseData.map((data) => CustomCategory.fromJson(data)).toList();
-        _customIncomeCategories = customIncomeData.map((data) => CustomCategory.fromJson(data)).toList();
-      });
-    } catch (e) {
-      print('Error loading category preferences: $e');
-    }
   }
 
   @override
@@ -114,8 +79,10 @@ class _AddTransactionState extends State<AddTransaction>
         return Theme(
           data: Theme.of(ctx).copyWith(
             colorScheme: Theme.of(ctx).colorScheme.copyWith(
-              primary: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
-            ),
+                  primary: _isExpense
+                      ? const Color(0xFFFF6B6B)
+                      : const Color(0xFF00B894),
+                ),
           ),
           child: child!,
         );
@@ -129,38 +96,17 @@ class _AddTransactionState extends State<AddTransaction>
   Future<void> _saveTransaction() async {
     if (!_canSave) return;
     final amount = double.parse(_amountController.text);
-    
-    // Determine the category and custom category ID
-    ExpenseCategory category;
-    String? customCategoryId;
-    
-    if (_isExpense) {
-      if (_selectedCustomExpenseCategory != null) {
-        category = ExpenseCategory.other; // Use 'other' as fallback for custom categories
-        customCategoryId = _selectedCustomExpenseCategory!.id;
-      } else {
-        category = _selectedExpenseCategory;
-      }
-    } else {
-      // For income, we'll use ExpenseCategory.other and rely on the amount sign
-      if (_selectedCustomIncomeCategory != null) {
-        category = ExpenseCategory.other;
-        customCategoryId = _selectedCustomIncomeCategory!.id;
-      } else {
-        category = ExpenseCategory.other; // Income always uses 'other' category
-      }
-    }
-    
+
     final item = ExpenseItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       amount: _isExpense ? amount : -amount,
-      category: category,
+      category: _isExpense ? _selectedExpenseCategory : ExpenseCategory.other,
       date: _selectedDate,
       paymentMethod: _selectedPaymentMethod,
-      isRecurring: _isRecurring, 
+      isRecurring: _isRecurring,
       description: '',
-      customCategoryId: customCategoryId,
+      customCategoryId: null,
     );
 
     try {
@@ -172,45 +118,12 @@ class _AddTransactionState extends State<AddTransaction>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error adding ${_isExpense ? 'expense' : 'income'}: $e'),
+          content:
+              Text('Error adding ${_isExpense ? 'expense' : 'income'}: $e'),
           backgroundColor: Colors.red,
         ),
       );
     }
-  }
-
-  void _showCategoryManager(bool isExpense) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return CategoryManagerDialog(
-          isExpense: isExpense,
-          deletedCategories: isExpense ? _deletedExpenseCategories : _deletedIncomeCategories,
-          onDeletedCategoriesChanged: (deletedCategories) {
-            setState(() {
-              if (isExpense) {
-                _deletedExpenseCategories = deletedCategories;
-              } else {
-                _deletedIncomeCategories = deletedCategories;
-              }
-            });
-          },
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
-      },
-    ).then((_) {
-      // Reload categories when dialog closes
-      _loadCategoryPreferences();
-    });
   }
 
   @override
@@ -222,10 +135,12 @@ class _AddTransactionState extends State<AddTransaction>
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom),
             child: Center(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.85,
                 ),
@@ -276,7 +191,8 @@ class _AddTransactionState extends State<AddTransaction>
       ),
       child: Row(
         children: [
-          Icon(_isExpense ? Icons.remove : Icons.add, color: Colors.white, size: 24),
+          Icon(_isExpense ? Icons.remove : Icons.add,
+              color: Colors.white, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -321,7 +237,8 @@ class _AddTransactionState extends State<AddTransaction>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.trending_down, color: _isExpense ? Colors.red : Colors.grey),
+                    Icon(Icons.trending_down,
+                        color: _isExpense ? Colors.red : Colors.grey),
                     const SizedBox(width: 8),
                     Text(
                       'Expense',
@@ -347,7 +264,8 @@ class _AddTransactionState extends State<AddTransaction>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.trending_up, color: !_isExpense ? Colors.green : Colors.grey),
+                    Icon(Icons.trending_up,
+                        color: !_isExpense ? Colors.green : Colors.grey),
                     const SizedBox(width: 8),
                     Text(
                       'Income',
@@ -374,7 +292,9 @@ class _AddTransactionState extends State<AddTransaction>
           _titleController,
           label: _isExpense ? 'Expense Title' : 'Income Source',
           hint: _isExpense ? 'e.g. Lunch' : 'e.g. Salary',
-          icon: _isExpense ? Icons.shopping_bag_outlined : Icons.account_balance_wallet_outlined,
+          icon: _isExpense
+              ? Icons.shopping_bag_outlined
+              : Icons.account_balance_wallet_outlined,
         ),
         const SizedBox(height: 20),
         _buildTextField(
@@ -386,7 +306,9 @@ class _AddTransactionState extends State<AddTransaction>
           prefix: '₹ ',
         ),
         const SizedBox(height: 20),
-        _isExpense ? _buildExpenseCategoryDropdown() : _buildIncomeCategoryDropdown(),
+        _isExpense
+            ? _buildExpenseCategoryDropdown()
+            : _buildIncomeCategoryDropdown(),
         const SizedBox(height: 20),
         _buildPaymentMethodDropdown(),
         const SizedBox(height: 20),
@@ -398,14 +320,14 @@ class _AddTransactionState extends State<AddTransaction>
   }
 
   Widget _buildTextField(
-      TextEditingController c, {
-        required String label,
-        required String hint,
-        required IconData icon,
-        int maxLines = 1,
-        TextInputType? keyboardType,
-        String? prefix,
-      }) {
+    TextEditingController c, {
+    required String label,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? prefix,
+  }) {
     return TextField(
       controller: c,
       maxLines: maxLines,
@@ -414,7 +336,9 @@ class _AddTransactionState extends State<AddTransaction>
         labelText: label,
         hintText: hint,
         prefixText: prefix,
-        prefixIcon: Icon(icon, color: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894)),
+        prefixIcon: Icon(icon,
+            color:
+                _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       onChanged: (_) => setState(() {}),
@@ -422,254 +346,62 @@ class _AddTransactionState extends State<AddTransaction>
   }
 
   Widget _buildExpenseCategoryDropdown() {
-    // Filter out deleted categories
-    final availableDefaultCategories = ExpenseCategory.values
-        .where((cat) => !_deletedExpenseCategories.contains(cat.toString().split('.').last))
-        .toList();
-    
-    // Get available custom categories
-    final availableCustomCategories = _customExpenseCategories
-        .where((cat) => !_deletedExpenseCategories.contains(cat.name))
-        .toList();
-    
-    // Ensure we have a valid selection
-    if (_selectedCustomExpenseCategory != null) {
-      // If custom category is selected, make sure it's still available
-      if (!availableCustomCategories.contains(_selectedCustomExpenseCategory)) {
-        _selectedCustomExpenseCategory = null;
-        if (availableDefaultCategories.isNotEmpty) {
-          _selectedExpenseCategory = availableDefaultCategories.first;
-        }
-      }
-    } else {
-      // If default category is selected, make sure it's still available
-      if (!availableDefaultCategories.contains(_selectedExpenseCategory)) {
-        if (availableDefaultCategories.isNotEmpty) {
-          _selectedExpenseCategory = availableDefaultCategories.first;
-        } else if (availableCustomCategories.isNotEmpty) {
-          _selectedCustomExpenseCategory = availableCustomCategories.first;
-        }
-      }
-    }
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _selectedCustomExpenseCategory?.id ?? _selectedExpenseCategory.toString(),
-                decoration: InputDecoration(
-                  labelText: 'Category',
-                  prefixIcon: Icon(Icons.category_outlined, color: const Color(0xFFFF6B6B)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    return DropdownButtonFormField<ExpenseCategory>(
+      value: _selectedExpenseCategory,
+      decoration: InputDecoration(
+        labelText: 'Category',
+        prefixIcon: Icon(Icons.category_outlined,
+            color: const Color(0xFFFF6B6B)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12)),
+      ),
+      items: ExpenseCategory.values
+          .map((cat) => DropdownMenuItem<ExpenseCategory>(
+                value: cat,
+                child: Row(
+                  children: [
+                    Icon(cat.icon, color: cat.color),
+                    const SizedBox(width: 8),
+                    Text(cat.label),
+                  ],
                 ),
-                items: () {
-                  // Combine all categories for sorting
-                  final allCategories = <Map<String, dynamic>>[];
-                  
-                  // Add default categories
-                  for (final cat in availableDefaultCategories) {
-                    allCategories.add({
-                      'type': 'default',
-                      'value': cat.toString(),
-                      'label': cat.label,
-                      'icon': cat.icon,
-                      'color': cat.color,
-                    });
-                  }
-                  
-                  // Add custom categories
-                  for (final cat in availableCustomCategories) {
-                    allCategories.add({
-                      'type': 'custom',
-                      'value': cat.id,
-                      'label': cat.label,
-                      'icon': cat.icon,
-                      'color': cat.color,
-                    });
-                  }
-                  
-                  // Sort alphabetically by label
-                  allCategories.sort((a, b) => (a['label'] as String).compareTo(b['label'] as String));
-                  
-                  // Convert to dropdown items
-                  return allCategories.map((catData) => DropdownMenuItem<String>(
-                    value: catData['value'] as String,
-                    child: Row(
-                      children: [
-                        Icon(catData['icon'] as IconData, color: catData['color'] as Color),
-                        const SizedBox(width: 8),
-                        Text(catData['label'] as String),
-                      ],
-                    ),
-                  )).toList();
-                }(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      // Check if it's a custom category
-                      final customCat = availableCustomCategories.firstWhere(
-                        (cat) => cat.id == val,
-                        orElse: () => CustomCategory(id: '', name: '', label: '', icon: Icons.category, color: Colors.grey, isExpense: true),
-                      );
-                      
-                      if (customCat.id.isNotEmpty) {
-                        _selectedCustomExpenseCategory = customCat;
-                      } else {
-                        _selectedCustomExpenseCategory = null;
-                        _selectedExpenseCategory = ExpenseCategory.values.firstWhere(
-                          (cat) => cat.toString() == val,
-                          orElse: () => ExpenseCategory.food,
-                        );
-                      }
-                    });
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFFF6B6B).withOpacity(0.3)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: IconButton(
-                onPressed: () => _showCategoryManager(true),
-                icon: const Icon(Icons.settings_outlined),
-                color: const Color(0xFFFF6B6B),
-                tooltip: 'Manage Categories',
-              ),
-            ),
-          ],
-        ),
-      ],
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) {
+          setState(() => _selectedExpenseCategory = val);
+        }
+      },
     );
   }
 
   Widget _buildIncomeCategoryDropdown() {
-    // Filter out deleted categories  
-    final availableDefaultCategories = IncomeCategory.values
-        .where((cat) => !_deletedIncomeCategories.contains(cat.toString().split('.').last))
-        .toList();
-    
-    // Get available custom categories
-    final availableCustomCategories = _customIncomeCategories
-        .where((cat) => !_deletedIncomeCategories.contains(cat.name))
-        .toList();
-    
-    // Ensure we have a valid selection
-    if (_selectedCustomIncomeCategory != null) {
-      // If custom category is selected, make sure it's still available
-      if (!availableCustomCategories.contains(_selectedCustomIncomeCategory)) {
-        _selectedCustomIncomeCategory = null;
-        if (availableDefaultCategories.isNotEmpty) {
-          _selectedIncomeCategory = availableDefaultCategories.first;
-        }
-      }
-    } else {
-      // If default category is selected, make sure it's still available
-      if (!availableDefaultCategories.contains(_selectedIncomeCategory)) {
-        if (availableDefaultCategories.isNotEmpty) {
-          _selectedIncomeCategory = availableDefaultCategories.first;
-        } else if (availableCustomCategories.isNotEmpty) {
-          _selectedCustomIncomeCategory = availableCustomCategories.first;
-        }
-      }
-    }
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _selectedCustomIncomeCategory?.id ?? _selectedIncomeCategory.toString(),
-                decoration: InputDecoration(
-                  labelText: 'Income Category',
-                  prefixIcon: Icon(Icons.currency_rupee, color: const Color(0xFF00B894)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    return DropdownButtonFormField<IncomeCategory>(
+      value: _selectedIncomeCategory,
+      decoration: InputDecoration(
+        labelText: 'Income Category',
+        prefixIcon: Icon(Icons.currency_rupee,
+            color: const Color(0xFF00B894)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12)),
+      ),
+      items: IncomeCategory.values
+          .map((cat) => DropdownMenuItem<IncomeCategory>(
+                value: cat,
+                child: Row(
+                  children: [
+                    Icon(cat.icon, color: cat.color),
+                    const SizedBox(width: 8),
+                    Text(cat.label),
+                  ],
                 ),
-                items: () {
-                  // Combine all categories for sorting
-                  final allCategories = <Map<String, dynamic>>[];
-                  
-                  // Add default categories
-                  for (final cat in availableDefaultCategories) {
-                    allCategories.add({
-                      'type': 'default',
-                      'value': cat.toString(),
-                      'label': cat.label,
-                      'icon': cat.icon,
-                      'color': cat.color,
-                    });
-                  }
-                  
-                  // Add custom categories
-                  for (final cat in availableCustomCategories) {
-                    allCategories.add({
-                      'type': 'custom',
-                      'value': cat.id,
-                      'label': cat.label,
-                      'icon': cat.icon,
-                      'color': cat.color,
-                    });
-                  }
-                  
-                  // Sort alphabetically by label
-                  allCategories.sort((a, b) => (a['label'] as String).compareTo(b['label'] as String));
-                  
-                  // Convert to dropdown items
-                  return allCategories.map((catData) => DropdownMenuItem<String>(
-                    value: catData['value'] as String,
-                    child: Row(
-                      children: [
-                        Icon(catData['icon'] as IconData, color: catData['color'] as Color),
-                        const SizedBox(width: 8),
-                        Text(catData['label'] as String),
-                      ],
-                    ),
-                  )).toList();
-                }(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      // Check if it's a custom category
-                      final customCat = availableCustomCategories.firstWhere(
-                        (cat) => cat.id == val,
-                        orElse: () => CustomCategory(id: '', name: '', label: '', icon: Icons.category, color: Colors.grey, isExpense: false),
-                      );
-                      
-                      if (customCat.id.isNotEmpty) {
-                        _selectedCustomIncomeCategory = customCat;
-                      } else {
-                        _selectedCustomIncomeCategory = null;
-                        _selectedIncomeCategory = IncomeCategory.values.firstWhere(
-                          (cat) => cat.toString() == val,
-                          orElse: () => IncomeCategory.salary,
-                        );
-                      }
-                    });
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF00B894).withOpacity(0.3)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: IconButton(
-                onPressed: () => _showCategoryManager(false),
-                icon: const Icon(Icons.settings_outlined),
-                color: const Color(0xFF00B894),
-                tooltip: 'Manage Categories',
-              ),
-            ),
-          ],
-        ),
-      ],
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) {
+          setState(() => _selectedIncomeCategory = val);
+        }
+      },
     );
   }
 
@@ -686,18 +418,20 @@ class _AddTransactionState extends State<AddTransaction>
       ),
       items: PaymentMethod.values
           .map((m) => DropdownMenuItem(
-        value: m,
-        child: Row(
-          children: [
-            Icon(
-              m.icon,
-              color: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
-            ),
-            SizedBox(width: 8),
-            Text(m.label),
-          ],
-        ),
-      ))
+                value: m,
+                child: Row(
+                  children: [
+                    Icon(
+                      m.icon,
+                      color: _isExpense
+                          ? const Color(0xFFFF6B6B)
+                          : const Color(0xFF00B894),
+                    ),
+                    SizedBox(width: 8),
+                    Text(m.label),
+                  ],
+                ),
+              ))
           .toList(),
       onChanged: (val) {
         if (val != null) setState(() => _selectedPaymentMethod = val);
@@ -713,7 +447,8 @@ class _AddTransactionState extends State<AddTransaction>
           labelText: 'Date',
           prefixIcon: Icon(
             Icons.calendar_today_outlined,
-            color: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
+            color:
+                _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
           ),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -727,7 +462,8 @@ class _AddTransactionState extends State<AddTransaction>
       title: Text('Recurring ${_isExpense ? 'Expense' : 'Income'}'),
       value: _isRecurring,
       onChanged: (v) => setState(() => _isRecurring = v),
-      activeColor: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
+      activeColor:
+          _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
     );
   }
 
@@ -744,13 +480,17 @@ class _AddTransactionState extends State<AddTransaction>
               },
               style: OutlinedButton.styleFrom(
                 side: BorderSide(
-                  color: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
+                  color: _isExpense
+                      ? const Color(0xFFFF6B6B)
+                      : const Color(0xFF00B894),
                 ),
               ),
               child: Text(
                 'Cancel',
                 style: TextStyle(
-                  color: _isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894),
+                  color: _isExpense
+                      ? const Color(0xFFFF6B6B)
+                      : const Color(0xFF00B894),
                 ),
               ),
             ),
@@ -761,8 +501,11 @@ class _AddTransactionState extends State<AddTransaction>
             child: ElevatedButton(
               onPressed: _canSave ? _saveTransaction : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                _canSave ? (_isExpense ? const Color(0xFFFF6B6B) : const Color(0xFF00B894)) : Colors.grey,
+                backgroundColor: _canSave
+                    ? (_isExpense
+                        ? const Color(0xFFFF6B6B)
+                        : const Color(0xFF00B894))
+                    : Colors.grey,
               ),
               child: Text('Add ${_isExpense ? 'Expense' : 'Income'}'),
             ),
