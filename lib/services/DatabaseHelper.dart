@@ -28,7 +28,7 @@ class ExpenseDatabase {
 
       return await openDatabase(
         path,
-        version: 5, // Increased version for adding customCategoryId column
+        version: 5, // Version for customCategoryId column
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         onOpen: (db) async {
@@ -176,7 +176,8 @@ class ExpenseDatabase {
     if (oldVersion < 5) {
       // Add customCategoryId column for version 5
       try {
-        await db.execute('ALTER TABLE transactions ADD COLUMN customCategoryId TEXT');
+        await db.execute(
+            'ALTER TABLE transactions ADD COLUMN customCategoryId TEXT');
       } catch (e) {
         print('Database upgrade error for version 5: $e');
         await _createDB(db, newVersion);
@@ -265,7 +266,8 @@ class ExpenseDatabase {
           'paymentMethod': transaction.paymentMethod.toString().split('.').last,
           'isRecurring': transaction.isRecurring ? 1 : 0,
           'transactionType': transactionType,
-          'incomeCategory': isIncome ? _getIncomeCategoryFromTitle(transaction.title) : null,
+          'incomeCategory':
+              isIncome ? _getIncomeCategoryFromTitle(transaction.title) : null,
           'customCategoryId': transaction.customCategoryId,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
@@ -290,17 +292,18 @@ class ExpenseDatabase {
         return ExpenseItem(
           id: json['id'] as String,
           title: json['title'] as String,
-          amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
+          amount:
+              (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.toString().split('.').last == json['category'],
+            (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.toString().split('.').last == json['paymentMethod'],
+            (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, 
+          isRecurring: (json['isRecurring'] as int?) == 1,
           description: '',
           customCategoryId: json['customCategoryId'] as String?,
         );
@@ -329,17 +332,18 @@ class ExpenseDatabase {
         return ExpenseItem(
           id: json['id'] as String,
           title: json['title'] as String,
-          amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
+          amount:
+              (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.toString().split('.').last == json['category'],
+            (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.toString().split('.').last == json['paymentMethod'],
+            (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, 
+          isRecurring: (json['isRecurring'] as int?) == 1,
           description: '',
           customCategoryId: json['customCategoryId'] as String?,
         );
@@ -363,17 +367,18 @@ class ExpenseDatabase {
         return ExpenseItem(
           id: json['id'] as String,
           title: json['title'] as String,
-          amount: (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
+          amount:
+              (json['amount'] is num ? json['amount'] as num : 0.0).toDouble(),
           category: ExpenseCategory.values.firstWhere(
-                (e) => e.toString().split('.').last == json['category'],
+            (e) => e.toString().split('.').last == json['category'],
             orElse: () => ExpenseCategory.other,
           ),
           date: DateTime.parse(json['date'] as String),
           paymentMethod: PaymentMethod.values.firstWhere(
-                (e) => e.toString().split('.').last == json['paymentMethod'],
+            (e) => e.toString().split('.').last == json['paymentMethod'],
             orElse: () => PaymentMethod.cash,
           ),
-          isRecurring: (json['isRecurring'] as int?) == 1, 
+          isRecurring: (json['isRecurring'] as int?) == 1,
           description: '',
           customCategoryId: json['customCategoryId'] as String?,
         );
@@ -413,7 +418,9 @@ class ExpenseDatabase {
       double totalExpenses = 0.0;
 
       for (final transaction in result) {
-        final amount = (transaction['amount'] is num ? transaction['amount'] as num : 0.0).toDouble();
+        final amount =
+            (transaction['amount'] is num ? transaction['amount'] as num : 0.0)
+                .toDouble();
         if (amount < 0) {
           totalIncome += amount.abs();
         } else {
@@ -464,7 +471,8 @@ class ExpenseDatabase {
           'paymentMethod': transaction.paymentMethod.name,
           'isRecurring': transaction.isRecurring ? 1 : 0,
           'transactionType': transactionType,
-          'incomeCategory': isIncome ? _getIncomeCategoryFromTitle(transaction.title) : null,
+          'incomeCategory':
+              isIncome ? _getIncomeCategoryFromTitle(transaction.title) : null,
         },
         where: 'id = ?',
         whereArgs: [transaction.id],
@@ -486,13 +494,18 @@ class ExpenseDatabase {
 
     if (titleLower.contains('salary') || titleLower.contains('wage')) {
       return 'salary';
-    } else if (titleLower.contains('business') || titleLower.contains('profit')) {
+    } else if (titleLower.contains('business') ||
+        titleLower.contains('profit')) {
       return 'business';
-    } else if (titleLower.contains('freelance') || titleLower.contains('contract')) {
+    } else if (titleLower.contains('freelance') ||
+        titleLower.contains('contract')) {
       return 'freelance';
-    } else if (titleLower.contains('investment') || titleLower.contains('dividend') || titleLower.contains('interest')) {
+    } else if (titleLower.contains('investment') ||
+        titleLower.contains('dividend') ||
+        titleLower.contains('interest')) {
       return 'investment';
-    } else if (titleLower.contains('bonus') || titleLower.contains('incentive')) {
+    } else if (titleLower.contains('bonus') ||
+        titleLower.contains('incentive')) {
       return 'bonus';
     } else if (titleLower.contains('gift') || titleLower.contains('present')) {
       return 'gift';
@@ -514,10 +527,14 @@ class ExpenseDatabase {
     try {
       final db = await instance.database;
 
-      final totalTransactions = await db.rawQuery('SELECT COUNT(*) as count FROM transactions');
-      final totalExpenses = await db.rawQuery('SELECT COUNT(*) as count FROM transactions WHERE amount > 0');
-      final totalIncome = await db.rawQuery('SELECT COUNT(*) as count FROM transactions WHERE amount < 0');
-      final totalUsers = await db.rawQuery('SELECT COUNT(*) as count FROM users');
+      final totalTransactions =
+          await db.rawQuery('SELECT COUNT(*) as count FROM transactions');
+      final totalExpenses = await db.rawQuery(
+          'SELECT COUNT(*) as count FROM transactions WHERE amount > 0');
+      final totalIncome = await db.rawQuery(
+          'SELECT COUNT(*) as count FROM transactions WHERE amount < 0');
+      final totalUsers =
+          await db.rawQuery('SELECT COUNT(*) as count FROM users');
 
       return {
         'total': totalTransactions.first['count'] as int,

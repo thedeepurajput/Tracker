@@ -37,6 +37,7 @@ class _PreHomePageState extends State<PreHomePage>
     String? name = prefs.getString('user_name');
 
     if (name != null && name.isNotEmpty) {
+      // Directly go to home without any authentication
       _goToHome(name);
     } else {
       setState(() {
@@ -106,7 +107,7 @@ class _PreHomePageState extends State<PreHomePage>
                 color: theme.colorScheme.background.withOpacity(0.95),
                 child: Padding(
                   padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -128,7 +129,8 @@ class _PreHomePageState extends State<PreHomePage>
                         "Let's personalize your experience.",
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onBackground.withOpacity(0.6),
+                          color:
+                              theme.colorScheme.onBackground.withOpacity(0.6),
                         ),
                       ),
                       const SizedBox(height: 24),
