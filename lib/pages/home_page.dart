@@ -138,6 +138,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }).toList();
   }
 
+  // Get all transactions for selected time period (ignoring category filter)
+  List<ExpenseItem> get _transactionsForPeriod {
+    return _transactions.where((transaction) {
+      final matchesDate = _matchesDateFilter(transaction.date);
+      return matchesDate;
+    }).toList();
+  }
+
   List<ExpenseItem> get _filteredExpenses {
     return _filteredTransactions
         .where((transaction) => transaction.isExpense)
@@ -310,12 +318,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _showDownloadDialog() {
-    print('Filtered transactions: ${_filteredTransactions.length}');
-    if (_filteredTransactions.isEmpty) {
+    // Get all expenses for the selected period (ignoring category filter)
+    final periodExpenses = _transactionsForPeriod.where((t) => t.isExpense).toList();
+    
+    if (periodExpenses.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              const Text('No transactions to download for the selected period'),
+              const Text('No expenses to download for the selected period'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
           shape:
@@ -325,14 +335,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return;
     }
 
+    // Calculate total for period expenses
+    final periodTotal = periodExpenses.fold(0.0, (sum, e) => sum + e.displayAmount);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => DownloadDialog(
-        expenses: _filteredTransactions,
+        expenses: periodExpenses,
         allExpenses: _transactions,
         periodLabel: _periodLabel,
-        totalAmount: _netBalance,
+        totalAmount: periodTotal,
         userName: _userName,
       ),
     );
@@ -1022,43 +1035,93 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 pinned: true,
                 backgroundColor: const Color(0xFF6C63FF),
                 elevation: 0,
-                title: _isSearching
-                    ? Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: TextField(
-                          autofocus: true,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: 'Search transactions...',
-                            hintStyle: TextStyle(color: Colors.white70),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
-                            prefixIcon:
-                                Icon(Icons.search, color: Colors.white70),
-                          ),
-                          onChanged: (value) =>
-                              setState(() => _searchQuery = value),
-                        ),
-                      )
+                leading: _isSearching
+                    ? null
                     : GestureDetector(
                         onTap: _showEditUsernameDialog,
-                        child: Text(
-                          'Hello, ${_userName.isEmpty ? 'User' : _userName}! 👋',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 5),
+                          child: Center(
+                            child: Text(
+                              'Hello, ${_userName.isEmpty ? 'User' : _userName}! 👋',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ),
+                leadingWidth: _isSearching ? 0 : 200,
+                title: _isSearching
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 0, vertical: 8),
+                        child: Container(
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            autofocus: true,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Search transactions...',
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 16,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Color(0xFF6C63FF),
+                                size: 28,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear_rounded,
+                                        color: Colors.grey,
+                                      ),
+                                      onPressed: () =>
+                                          setState(() => _searchQuery = ''),
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 16,
+                              ),
+                            ),
+                            onChanged: (value) =>
+                                setState(() => _searchQuery = value),
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
                 actions: [
                   IconButton(
-                    icon: Icon(_isSearching ? Icons.close : Icons.search,
-                        color: Colors.white),
+                    icon: Icon(
+                        _isSearching
+                            ? Icons.close_rounded
+                            : Icons.search_rounded,
+                        color: Colors.white,
+                        size: 28),
                     onPressed: () {
                       setState(() {
                         _isSearching = !_isSearching;
@@ -1101,7 +1164,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ),
                         ),
                         const PopupMenuDivider(),
-                        // Show all categories
                         ...ExpenseCategory.values.map(
                           (category) => PopupMenuItem<String>(
                             value: category.toString(),
