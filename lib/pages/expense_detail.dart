@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/DatabaseHelper.dart';
 import 'model.dart';
 
@@ -15,13 +16,11 @@ class ExpenseDetailsBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<ExpenseDetailsBottomSheet> createState() =>
-      _ExpenseDetailsBottomSheetState();
+  State<ExpenseDetailsBottomSheet> createState() => _ExpenseDetailsBottomSheetState();
 }
 
 class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
   late TextEditingController _amountController;
   late ExpenseCategory _selectedCategory;
   late PaymentMethod _selectedPaymentMethod;
@@ -33,10 +32,7 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.expense.title);
-    _descriptionController =
-        TextEditingController(text: widget.expense.description);
-    _amountController =
-        TextEditingController(text: widget.expense.amount.toString());
+    _amountController = TextEditingController(text: widget.expense.amount.abs().toStringAsFixed(0));
     _selectedCategory = widget.expense.category;
     _selectedPaymentMethod = widget.expense.paymentMethod;
     _selectedDate = widget.expense.date;
@@ -46,16 +42,8 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
     _amountController.dispose();
     super.dispose();
-  }
-
-  bool get _canSave {
-    return _titleController.text.trim().isNotEmpty &&
-        _amountController.text.isNotEmpty &&
-        double.tryParse(_amountController.text) != null &&
-        double.parse(_amountController.text) > 0;
   }
 
   Future<void> _pickDate() async {
@@ -71,653 +59,267 @@ class _ExpenseDetailsBottomSheetState extends State<ExpenseDetailsBottomSheet> {
   }
 
   Future<void> _saveChanges() async {
-    if (!_canSave) return;
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null) return;
 
-    try {
-      final updatedExpense = ExpenseItem(
-        id: widget.expense.id,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        amount: double.parse(_amountController.text),
-        category: _selectedCategory,
-        date: _selectedDate,
-        paymentMethod: _selectedPaymentMethod,
-        isRecurring: _isRecurring,
+    final updatedExpense = ExpenseItem(
+      id: widget.expense.id,
+      title: _titleController.text.trim(),
+      amount: widget.expense.isExpense ? -amount.abs() : amount.abs(),
+      category: _selectedCategory,
+      date: _selectedDate,
+      paymentMethod: _selectedPaymentMethod,
+      isRecurring: _isRecurring,
+    );
+
+    await ExpenseDatabase.instance.updateExpense(updatedExpense);
+    widget.onUpdate(updatedExpense);
+
+    setState(() => _isEditing = false);
+    if(mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Transaction updated successfully"))
       );
-
-      await ExpenseDatabase.instance.updateExpense(updatedExpense);
-      widget.onUpdate(updatedExpense);
-      setState(() => _isEditing = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Expense updated successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating expense: $e')),
-        );
-      }
     }
   }
 
   Future<void> _deleteExpense() async {
-    final confirmed = await showDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Expense'),
-        content: const Text('Are you sure you want to delete this expense?'),
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Transaction"),
+        content: const Text("Are you sure you want to delete this?"),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Delete", style: TextStyle(color: Colors.red))
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
-      try {
-        await ExpenseDatabase.instance.deleteExpense(widget.expense.id);
-        widget.onDelete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Expense deleted successfully')),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting expense: $e')),
-          );
-        }
-      }
+    if (confirm == true) {
+      await ExpenseDatabase.instance.deleteExpense(widget.expense.id);
+      if (mounted) Navigator.pop(context);
+      widget.onDelete();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isIncome = widget.expense.isIncome;
+    final color = isIncome ? const Color(0xFF00B894) : const Color(0xFFFF6B6B);
 
     return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
       ),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
             ),
-            child: Column(
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Handle bar
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                Text(
+                    _isEditing ? 'Edit Transaction' : 'Details',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
                 ),
-
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _getCategoryColor(widget.expense.category)
-                              .withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          _getCategoryIcon(widget.expense.category),
-                          color: _getCategoryColor(widget.expense.category),
-                          size: 24,
-                        ),
+                Row(
+                  children: [
+                    if (!_isEditing) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit_rounded, color: Colors.blue),
+                        onPressed: () => setState(() => _isEditing = true),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Expense Details',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              _formatDate(_selectedDate),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                        onPressed: _deleteExpense,
                       ),
-                      if (!_isEditing) ...[
-                        IconButton(
-                          onPressed: () => setState(() => _isEditing = true),
-                          icon: const Icon(Icons.edit),
-                          style: IconButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primaryContainer,
-                            foregroundColor:
-                                theme.colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _deleteExpense,
-                          icon: const Icon(Icons.delete),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.red.withOpacity(0.1),
-                            foregroundColor: Colors.red,
-                          ),
-                        ),
-                      ],
-                      if (_isEditing) ...[
-                        IconButton(
-                          onPressed: () => setState(() => _isEditing = false),
-                          icon: const Icon(Icons.close),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _canSave ? _saveChanges : null,
-                          icon: const Icon(Icons.check),
-                          style: IconButton.styleFrom(
-                            backgroundColor: _canSave
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurface.withOpacity(0.3),
-                            foregroundColor: _canSave
-                                ? theme.colorScheme.onPrimary
-                                : theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Content
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildDetailSection(theme),
-                        const SizedBox(height: 20),
-                        _buildCategoryAndPaymentSection(theme),
-                        const SizedBox(height: 20),
-                        _buildDateSection(theme),
-                        const SizedBox(height: 20),
-                        _buildRecurringSection(theme),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
-                ),
+                    ] else ...[
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => setState(() => _isEditing = false),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.check_rounded, color: Colors.green),
+                        onPressed: _saveChanges,
+                      ),
+                    ]
+                  ],
+                )
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
 
-  Widget _buildDetailSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Expense Details',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
+          const Divider(height: 1),
 
-            // Title
-            if (_isEditing)
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Product',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => setState(() {}),
-              )
-            else
-              _buildDetailRow(
-                'Product',
-                widget.expense.title,
-                Icons.shopping_bag,
-                theme,
-              ),
-
-            const SizedBox(height: 16),
-
-            // Description
-            if (_isEditing)
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-              )
-            else if (widget.expense.description.isNotEmpty)
-              _buildDetailRow(
-                'Description',
-                widget.expense.description,
-                Icons.description,
-                theme,
-              ),
-
-            const SizedBox(height: 16),
-
-            // Amount
-            if (_isEditing)
-              TextField(
-                controller: _amountController,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                  prefixText: '₹ ',
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
-              )
-            else
-              _buildDetailRow(
-                'Amount',
-                '₹${widget.expense.amount.toStringAsFixed(0)}',
-                Icons.currency_rupee,
-                theme,
-                valueColor: theme.colorScheme.primary,
-                isLarge: true,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryAndPaymentSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Category & Payment',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Category
-            if (_isEditing)
-              DropdownButtonFormField<ExpenseCategory>(
-                value: _selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(),
-                ),
-                items: ExpenseCategory.values.map((category) {
-                  return DropdownMenuItem(
-                    value: category,
-                    child: Row(
-                      children: [
-                        Icon(_getCategoryIcon(category),
-                            color: _getCategoryColor(category), size: 20),
-                        const SizedBox(width: 8),
-                        Text(category.name),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) setState(() => _selectedCategory = value);
-                },
-              )
-            else
-              Row(
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(widget.expense.category)
-                          .withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                  if (!_isEditing) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '₹${widget.expense.amount.abs().toStringAsFixed(0)}',
+                      style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: color),
                     ),
-                    child: Icon(
-                      _getCategoryIcon(widget.expense.category),
-                      color: _getCategoryColor(widget.expense.category),
-                      size: 20,
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        isIncome ? 'Income' : 'Expense',
+                        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Category',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                    const SizedBox(height: 30),
+                  ],
+
+                  if (_isEditing) ...[
+                    TextField(
+                      controller: _titleController,
+                      style: theme.textTheme.bodyLarge,
+                      decoration: InputDecoration(
+                        labelText: 'Title',
+                        prefixIcon: const Icon(Icons.title),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _amountController,
+                      style: theme.textTheme.bodyLarge,
+                      decoration: InputDecoration(
+                        labelText: 'Amount',
+                        // Yahan change kiya hai: Icons.attach_money -> Icons.currency_rupee
+                        prefixIcon: const Icon(Icons.currency_rupee),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (widget.expense.isExpense)
+                      DropdownButtonFormField<ExpenseCategory>(
+                        value: _selectedCategory,
+                        decoration: InputDecoration(
+                          labelText: 'Category',
+                          prefixIcon: const Icon(Icons.category),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        Text(
-                          widget.expense.category.name,
-                          style: theme.textTheme.bodyLarge,
+                        items: ExpenseCategory.values.map((cat) => DropdownMenuItem(
+                          value: cat,
+                          child: Text(cat.label),
+                        )).toList(),
+                        onChanged: (val) => setState(() => _selectedCategory = val!),
+                      ),
+                    if (widget.expense.isExpense) const SizedBox(height: 16),
+
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Date',
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                      ],
+                        child: Text(
+                          DateFormat('dd/MM/yyyy').format(_selectedDate),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField<PaymentMethod>(
+                      value: _selectedPaymentMethod,
+                      decoration: InputDecoration(
+                        labelText: 'Payment Method',
+                        prefixIcon: const Icon(Icons.payment),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: PaymentMethod.values.map((m) => DropdownMenuItem(
+                        value: m,
+                        child: Text(m.label),
+                      )).toList(),
+                      onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    SwitchListTile(
+                      title: const Text('Recurring Transaction'),
+                      value: _isRecurring,
+                      activeColor: theme.colorScheme.primary,
+                      onChanged: (val) => setState(() => _isRecurring = val),
+                    ),
+
+                  ] else ...[
+                    _buildDetailRow(theme, Icons.description_outlined, "Title", widget.expense.title),
+                    _buildDetailRow(theme, Icons.category_outlined, "Category", widget.expense.category.label),
+                    _buildDetailRow(theme, Icons.calendar_today_outlined, "Date", DateFormat('dd MMMM yyyy').format(widget.expense.date)),
+                    _buildDetailRow(theme, Icons.payment_outlined, "Method", widget.expense.paymentMethod.label),
+                    if (widget.expense.isRecurring)
+                      _buildDetailRow(theme, Icons.repeat, "Recurring", "Yes"),
+                  ],
                 ],
               ),
-
-            const SizedBox(height: 16),
-
-            // Payment Method
-            if (_isEditing)
-              DropdownButtonFormField<PaymentMethod>(
-                value: _selectedPaymentMethod,
-                decoration: const InputDecoration(
-                  labelText: 'Payment Method',
-                  border: OutlineInputBorder(),
-                ),
-                items: PaymentMethod.values.map((method) {
-                  return DropdownMenuItem(
-                    value: method,
-                    child: Row(
-                      children: [
-                        Icon(_getPaymentIcon(method), size: 20),
-                        const SizedBox(width: 8),
-                        Text(method.name),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null)
-                    setState(() => _selectedPaymentMethod = value);
-                },
-              )
-            else
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      _getPaymentIcon(widget.expense.paymentMethod),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Payment Method',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        Text(
-                          widget.expense.paymentMethod.name,
-                          style: theme.textTheme.bodyLarge,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Date',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
             ),
-            const SizedBox(height: 16),
-            if (_isEditing)
-              InkWell(
-                onTap: _pickDate,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Date',
-                    border: OutlineInputBorder(),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(_formatDate(_selectedDate)),
-                      const Icon(Icons.calendar_today, size: 20),
-                    ],
-                  ),
-                ),
-              )
-            else
-              _buildDetailRow(
-                'Date',
-                _formatDate(_selectedDate),
-                Icons.calendar_today,
-                theme,
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildRecurringSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recurring',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+  Widget _buildDetailRow(ThemeData theme, IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12)
             ),
-            const SizedBox(height: 8),
-            if (_isEditing)
-              SwitchListTile(
-                title: const Text('Recurring Expense'),
-                value: _isRecurring,
-                onChanged: (val) => setState(() => _isRecurring = val),
-                contentPadding: EdgeInsets.zero,
-              )
-            else
-              Row(
-                children: [
-                  Icon(
-                    _isRecurring ? Icons.repeat : Icons.today,
-                    color: _isRecurring
-                        ? Colors.green
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    _isRecurring ? 'Recurring expense' : 'One-time expense',
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(
-    String label,
-    String value,
-    IconData icon,
-    ThemeData theme, {
-    Color? valueColor,
-    bool isLarge = false,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
+            child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                  label,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w500)
               ),
+              const SizedBox(height: 2),
               Text(
-                value,
-                style: isLarge
-                    ? theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: valueColor,
-                      )
-                    : theme.textTheme.bodyLarge?.copyWith(
-                        color: valueColor,
-                      ),
+                  value,
+                  style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600, fontSize: 16)
               ),
             ],
-          ),
-        ),
-      ],
+          )
+        ],
+      ),
     );
-  }
-
-  Color _getCategoryColor(ExpenseCategory category) {
-    switch (category) {
-      case ExpenseCategory.food:
-        return Colors.orange;
-      case ExpenseCategory.transport:
-        return Colors.blue;
-      case ExpenseCategory.shopping:
-        return Colors.purple;
-      case ExpenseCategory.entertainment:
-        return Colors.pink;
-      case ExpenseCategory.bills:
-        return Colors.red;
-      case ExpenseCategory.health:
-        return Colors.green;
-      case ExpenseCategory.education:
-        return Colors.indigo;
-      case ExpenseCategory.other:
-        return Colors.grey;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getCategoryIcon(ExpenseCategory category) {
-    switch (category) {
-      case ExpenseCategory.food:
-        return Icons.restaurant;
-      case ExpenseCategory.transport:
-        return Icons.directions_car;
-      case ExpenseCategory.shopping:
-        return Icons.shopping_bag;
-      case ExpenseCategory.entertainment:
-        return Icons.movie;
-      case ExpenseCategory.bills:
-        return Icons.receipt;
-      case ExpenseCategory.health:
-        return Icons.health_and_safety;
-      case ExpenseCategory.education:
-        return Icons.school;
-      case ExpenseCategory.other:
-        return Icons.category;
-      default:
-        return Icons.category;
-    }
-  }
-
-  IconData _getPaymentIcon(PaymentMethod method) {
-    switch (method) {
-      case PaymentMethod.cash:
-        return Icons.money;
-      case PaymentMethod.creditCard:
-        return Icons.credit_card;
-      case PaymentMethod.upi:
-        return Icons.payment;
-      case PaymentMethod.netBanking:
-        return Icons.account_balance;
-      // case PaymentMethod.wallet:
-      //   return Icons.wallet;
-      default:
-        return Icons.payment;
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final dateOnly = DateTime(date.year, date.month, date.day);
-
-    String dateStr;
-    if (dateOnly == today) {
-      dateStr = 'Today';
-    } else if (dateOnly == yesterday) {
-      dateStr = 'Yesterday';
-    } else {
-      dateStr = '${date.day}/${date.month}/${date.year}';
-    }
-
-    return dateStr;
   }
 }

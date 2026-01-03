@@ -1,8 +1,7 @@
-name: tracker
+name: expanse_tracker
 description: A new Flutter project.
 publish_to: 'none'
-
-version: 3.2.0+1
+version: 3.1.10
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -14,32 +13,29 @@ dependencies:
   shared_preferences: ^2.2.2
   sqflite: ^2.3.2
   path: ^1.8.3
-  intl: ^0.18.1
-  share_plus: ^7.2.1
+  intl: ^0.19.0
+  package_info_plus: ^5.0.1
   pdf: ^3.10.6
-  excel: ^4.0.3
   open_file: ^3.3.2
   path_provider: ^2.1.1
-  flutter_launcher_icons: ^0.13.1
+  fl_chart: ^0.66.0
+  local_auth: ^2.1.6
+  google_fonts: ^6.1.0
+  image_picker: ^1.0.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons:
 
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/image/logo.png"
-
-  # Adaptive icon for modern Android (8.0+)
-  adaptive_icon_background: "#ffffff" # Background color
-  adaptive_icon_foreground: "assets/image/logo.png" # Foreground image
-
-  # Remove background for transparent logo
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/image/logo.png"
   remove_alpha_ios: true
-
-  # For better quality
   min_sdk_android: 21
 
 flutter:

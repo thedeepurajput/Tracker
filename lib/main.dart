@@ -1,7 +1,36 @@
+import 'package:expanse_tracker/services/pre_Homepage.dart';
+import 'package:expanse_tracker/theme/app_theme.dart';
 import 'package:flutter/material.dart';
-import 'package:tracker/services/pre_Homepage.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Import this
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Orientation Lock
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Status bar style
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+  ));
+
+  // Load Saved Theme
+  final prefs = await SharedPreferences.getInstance();
+  final themeString = prefs.getString('theme_mode');
+
+  // Set initial theme
+  if (themeString == 'light') {
+    AppTheme.themeNotifier.value = ThemeMode.light;
+  } else if (themeString == 'dark') {
+    AppTheme.themeNotifier.value = ThemeMode.dark;
+  } else {
+    AppTheme.themeNotifier.value = ThemeMode.system;
+  }
+
   runApp(const MyApp());
 }
 
@@ -10,70 +39,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Expense Tracker',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.teal,
-        brightness: Brightness.light,
-        appBarTheme: AppBarTheme(
-          elevation: 0,
-          backgroundColor: Colors.teal.shade600,
-          foregroundColor: Colors.white,
-          centerTitle: true,
-          titleTextStyle: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: Colors.teal.shade600,
-          elevation: 8,
-          extendedPadding: const EdgeInsets.all(20),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.teal.shade600,
-            foregroundColor: Colors.white,
-            elevation: 4,
-            shadowColor: Colors.teal.withOpacity(0.4),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.08),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.grey.shade50,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.teal.shade600, width: 2),
-          ),
-        ),
-        scaffoldBackgroundColor: Colors.grey.shade50,
-      ),
-      debugShowCheckedModeBanner: false,
-      home: const PreHomePage(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppTheme.themeNotifier,
+      builder: (context, currentMode, child) {
+        return MaterialApp(
+          title: 'Expense Tracker',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentMode,
+          home: const PreHomePage(),
+        );
+      },
     );
   }
 }
